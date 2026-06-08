@@ -11,19 +11,12 @@ import java.io.StringReader;
 import java.util.List;
 
 /**
- * Compiler — Controlador principal del intérprete GoLite.
- *
- * Orquesta las fases del compilador en este orden:
- *   1. Análisis Léxico   (Lexer generado por JFlex)
- *   2. Análisis Sintáctico (Parser generado por CUP)  ← Día 2
- *   3. Análisis Semántico / Intérprete                ← Día 3
- *
  * La GUI llama a compilar(String codigoFuente) y obtiene el resultado
  * para mostrarlo en la consola y habilitar los reportes.
  */
 public class Compiler {
 
-    // ─── Singleton ─────────────────────────────────────────────────────────────
+
 
     private static Compiler instancia;
 
@@ -36,7 +29,6 @@ public class Compiler {
         return instancia;
     }
 
-    // ─── Estado de la última compilación ───────────────────────────────────────
 
     private String       salidaConsola = "";
     private List<Token>  tokens;
