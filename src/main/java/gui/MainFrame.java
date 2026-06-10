@@ -355,6 +355,13 @@ public class MainFrame extends JFrame {
     private void agregarTab(EditorTab tab, String titulo) {
         tabbedEditor.addTab(titulo, tab);
         tabbedEditor.setSelectedIndex(tabbedEditor.getTabCount() - 1);
+
+        // Se conserva el DocumentListener dinámico para vigilar modificaciones en tiempo real
+        tab.areaTexto.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e)  { actualizarTituloTab(tab); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e)  { actualizarTituloTab(tab); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { actualizarTituloTab(tab); }
+        });
     }
 
     private EditorTab getTabActivo() {
@@ -363,10 +370,21 @@ public class MainFrame extends JFrame {
         return (EditorTab) tabbedEditor.getComponentAt(idx);
     }
 
+    private void actualizarTituloTab(EditorTab tab) {
+        int idx = tabbedEditor.indexOfComponent(tab);
+        if (idx == -1) return;
+
+        String titulo = tab.getNombre();
+        if (tab.tieneModificaciones()) {
+            titulo = titulo + " *";  // Se añade el asterisco si hay cambios pendientes
+        }
+        tabbedEditor.setTitleAt(idx, titulo);
+    }
+
     private void actualizarTituloTab() {
         int idx = tabbedEditor.getSelectedIndex();
         if (idx == -1) return;
         EditorTab tab = (EditorTab) tabbedEditor.getComponentAt(idx);
-        tabbedEditor.setTitleAt(idx, tab.getNombre());
+        actualizarTituloTab(tab);
     }
 }

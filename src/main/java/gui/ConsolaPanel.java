@@ -7,11 +7,9 @@ import java.awt.*;
  * ConsolaPanel — Área de consola del IDE GoLite.
  *
  * Muestra en tiempo real:
- *  - La salida del programa (fmt.Println)
- *  - Mensajes del compilador ([INFO], [OK], [WARN], [ERROR])
- *  - Resumen de errores
- *
- * El PDF especifica que solo se califica si la salida aparece en la consola.
+ * - La salida del programa (fmt.Println)
+ * - Mensajes del compilador ([INFO], [OK], [WARN], [ERROR])
+ * - Resumen de errores
  */
 public class ConsolaPanel extends JPanel {
 
@@ -65,7 +63,6 @@ public class ConsolaPanel extends JPanel {
             areaConsola.append(texto);
             // Auto-scroll al final
             areaConsola.setCaretPosition(areaConsola.getDocument().getLength());
-    
         });
     }
 

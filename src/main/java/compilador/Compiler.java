@@ -1,10 +1,16 @@
 package compilador;
 
+import ast.NodoPrograma;
+import entorno.Entorno;
+import entorno.ReporteAST;
+import entorno.TablaSimbolos;
 import errores.ErrorManager;
-import tokens.TablaTokens;
-/**
+import excepciones.BreakException;
+import excepciones.ContinueException;
+import excepciones.ErrorSemanticoException;
 import lexer.Lexer;
-*/
+import parser.Parser;
+import tokens.TablaTokens;
 import tokens.Token;
 
 import java.io.StringReader;
@@ -12,136 +18,178 @@ import java.util.List;
 
 /**
  * Compiler — Controlador principal del intérprete GoLite.
- *
- * Orquesta las fases del compilador en este orden:
- *   1. Análisis Léxico   (Lexer generado por JFlex)
- *   2. Análisis Sintáctico (Parser generado por CUP)  ← Día 2
- *   3. Análisis Semántico / Intérprete                ← Día 3
- *
- * La GUI llama a compilar(String codigoFuente) y obtiene el resultado
- * para mostrarlo en la consola y habilitar los reportes.
+ * Completamente acoplado al ecosistema tolerante a fallos y recolección múltiple de errores.
  */
 public class Compiler {
 
-    // ─── Singleton ─────────────────────────────────────────────────────────────
-
     private static Compiler instancia;
-
     private Compiler() {}
 
-    public static Compiler getInstance() {
-        if (instancia == null) {
-            instancia = new Compiler();
-        }
+    public static synchronized Compiler getInstance() {
+        if (instancia == null) instancia = new Compiler();
         return instancia;
     }
 
-    // ─── Estado de la última compilación ───────────────────────────────────────
-
-    private String       salidaConsola = "";
     private List<Token>  tokens;
+    private NodoPrograma ast;
+    private Entorno      entornoGlobal;
+    private String       salidaConsola = "";
 
-    // ─── Punto de entrada principal ────────────────────────────────────────────
-
-    /**
-     * Ejecuta todas las fases del compilador sobre el código fuente recibido.
-     *
-     * @param codigoFuente Texto del archivo .glt
-     * @return Texto que debe mostrarse en la consola del IDE GoLite
-     */
     public String compilar(String codigoFuente) {
-
-        // ── Limpiar estado de compilaciones anteriores ──────────────────────
-        ErrorManager.getInstance().reset();
-        TablaTokens.getInstance().reset();
-        salidaConsola = "";
+        // 1. Reset total de estados (higiene de memoria entre ejecuciones)
+        resetEstado();
 
         StringBuilder consola = new StringBuilder();
-        consola.append("> Ejecutando análisis...\n");
-        consola.append("[INFO] Compilación iniciada\n");
-/**
-        // ── FASE 1: Análisis Léxico ──────────────────────────────────────────
+        consola.append("[INFO] Compilación iniciada\n─────────────────────────────────\n");
+
+        // ════════════════════════════════════════════════════════════════════
+        // FASE 1 — ANÁLISIS LÉXICO
+        // ════════════════════════════════════════════════════════════════════
+        Lexer lexer;
         try {
-            Lexer lexer = new Lexer(new StringReader(codigoFuente));
-            tokens = lexer.getListaTokens();
+            lexer = new Lexer(new StringReader(codigoFuente));
+        } catch (Exception e) {
+            return "[FATAL] Error crítico al inicializar el Lexer: " + e.getMessage();
+        }
 
-            // Avanzar el lexer para llenar la lista de tokens
-            // (CUP lo hará automáticamente en Fase 2, aquí lo hacemos manual)
-            java_cup.runtime.Symbol s;
-            do {
-                s = lexer.next_token();
-                // Los tokens ya se registran dentro del método token() del lexer
-            } while (s.sym != sym.EOF);
+        // ════════════════════════════════════════════════════════════════════
+        // FASE 2 — ANÁLISIS SINTÁCTICO
+        // ════════════════════════════════════════════════════════════════════
+        try {
+            Parser parser = new Parser(lexer);
+            java_cup.runtime.Symbol resultado = parser.parse();
 
-            // Pasar tokens a la tabla global
-            for (Token t : lexer.getListaTokens()) {
-                TablaTokens.getInstance().agregar(t);
+            this.tokens = lexer.getListaTokens();
+            if (this.tokens != null) {
+                for (Token t : tokens) TablaTokens.getInstance().agregar(t);
             }
+
+            consola.append("[INFO] Tokens reconocidos: ").append(TablaTokens.getInstance().totalTokens()).append("\n");
 
             if (ErrorManager.getInstance().hayErroresLexicos()) {
                 consola.append("[WARN] Se encontraron errores léxicos.\n");
-            } else {
-                consola.append("[OK]   Análisis léxico completado sin errores.\n");
             }
 
-            consola.append(String.format("[INFO] Tokens reconocidos: %d\n",
-                    TablaTokens.getInstance().totalTokens()));
+            // Si hay errores sintácticos severos, interrumpimos antes de pasar al AST
+            if (ErrorManager.getInstance().hayErroresSintacticos()) {
+                consola.append("[ERROR] Errores sintácticos detectados. No se puede construir el AST.\n");
+                this.salidaConsola = consola.toString();
+                return this.salidaConsola;
+            }
 
+            if (resultado != null && resultado.value instanceof NodoPrograma) {
+                this.ast = (NodoPrograma) resultado.value;
+                consola.append("[OK]   AST generado con éxito.\n");
+            } else {
+                consola.append("[ERROR] El parser no generó un AST válido.\n");
+                this.salidaConsola = consola.toString();
+                return this.salidaConsola;
+            }
         } catch (Exception e) {
-            ErrorManager.getInstance().agregarLexico(
-                "Error inesperado en el análisis léxico: " + e.getMessage(), 0, 0
-            );
-            consola.append("[ERROR] Fallo en el análisis léxico: ").append(e.getMessage()).append("\n");
+            return "[ERROR] Fallo crítico en la fase sintáctica: " + e.getMessage();
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // FASE 3 — INTÉRPRETE (TOLERANTE A FALLOS SEMÁNTICOS)
+        // ════════════════════════════════════════════════════════════════════
+        consola.append("─────────────────────────────────\n[INFO] Ejecutando AST...\n");
+
+        if (this.ast == null) {
+            return consola.append("[ERROR] AST inexistente, ejecución abortada.").toString();
+        }
+
+        try {
+            // Se ejecuta la raíz del programa. Las fallas semánticas internas poblarán 
+            // el ErrorManager sin arrojar excepciones que rompan el ciclo del Compiler.
+            this.ast.execute(this.entornoGlobal);
             
+            // Recuperar lo que se haya acumulado de fmt.Println en el entorno global
+            String salidaPrograma = entornoGlobal.getSalidaConsola();
+            if (salidaPrograma != null && !salidaPrograma.isEmpty()) {
+                consola.append(salidaPrograma);
+            }
+
+            // Comprobación de salud post-ejecución
+            if (ErrorManager.getInstance().hayErroresSemanticos()) {
+                consola.append("\n[WARN] Ejecución finalizada, pero se registraron errores semánticos (Ver Reporte).\n");
+            } else {
+                consola.append("\n[OK]   Ejecución completada con éxito.\n");
+            }
+
+        } catch (ErrorSemanticoException e) {
+            // Salvaguarda para nodos legados que aún dependan de excepciones puntuales
+            ErrorManager.getInstance().agregarSemantico(e.getDescripcion(), e.getLinea(), e.getColumna());
+            consola.append("[ERROR Semántico Intermitente] ").append(e.getDescripcion()).append("\n");
+        } catch (BreakException | ContinueException e) {
+            // Ajuste defensivo: Evitamos usar métodos get que causan errores de compilación
+            int ln = 0;
+            int cl = 0;
+            
+            ErrorManager.getInstance().agregarSemantico(
+                "Sentencia de control de bucle (break o continue) fuera de ámbito.", 
+                ln, cl
+            );
+            consola.append("[ERROR] Sentencia de control fuera de un ciclo activo.\n");
+        } catch (Exception e) {
+            consola.append("[CRITICAL] Excepción no controlada en ejecución: ").append(e.toString()).append("\n");
+            e.printStackTrace(); 
         }
 
-        // ── FASE 2: Análisis Sintáctico (se integra en Día 2) ───────────────
-        consola.append("[INFO] Análisis sintáctico pendiente (Día 2).\n");
-
-        // ── FASE 3: Análisis Semántico / Intérprete (Día 3) ─────────────────
-        consola.append("[INFO] Intérprete pendiente (Día 3).\n");
-
-        // ── Resumen final ────────────────────────────────────────────────────
-        if (ErrorManager.getInstance().hayErrores()) {
-            consola.append(String.format("\n[RESUMEN] %d error(es) encontrado(s).\n",
-                    ErrorManager.getInstance().totalErrores()));
+        // ════════════════════════════════════════════════════════════════════
+        // CIERRE Y RESUMEN METRICAS
+        // ════════════════════════════════════════════════════════════════════
+        consola.append("─────────────────────────────────\n");
+        int totalErrores = ErrorManager.getInstance().totalErrores();
+        
+        if (totalErrores > 0) {
+            consola.append("[RESUMEN] Proceso terminado. Se detectaron ").append(totalErrores).append(" errores en total.\n");
         } else {
-            consola.append("\n[RESUMEN] Compilación exitosa.\n");
+            consola.append("[RESUMEN] ¡Compilación y ejecución exitosa sin fallos!\n");
         }
- */
-// TODO Día 2: descomentar cuando exista sym y Parser
 
-        salidaConsola = consola.toString();
-        return salidaConsola;
+        this.salidaConsola = consola.toString();
+        return this.salidaConsola;
     }
 
-    // ─── Getters para la GUI ────────────────────────────────────────────────────
-
-    public String getSalidaConsola() {
-        return salidaConsola;
+    private void resetEstado() {
+        ErrorManager.getInstance().reset();
+        TablaTokens.getInstance().reset();
+        this.ast = null;
+        this.entornoGlobal = new Entorno();
+        this.salidaConsola = "";
+        this.tokens = null;
     }
 
-    public List<Token> getTokens() {
-        return tokens;
+    // ─── Getters Defensivos ────────────────────────────────────────────────────
+    
+    public String getSalidaConsola() { return salidaConsola != null ? salidaConsola : ""; }
+    public boolean hayErrores()       { return ErrorManager.getInstance().hayErrores(); }
+    public boolean hayAST()           { return ast != null; }
+
+    public String getReporteErroresHTML() { 
+        return ErrorManager.getInstance().generarReporteHTML(); 
     }
 
-    public String getReporteErrores() {
-        return ErrorManager.getInstance().generarReporte();
+    public String getReporteTokensHTML() { 
+        return TablaTokens.getInstance().generarReporteHTML(); 
     }
 
-    public String getReporteErroresHTML() {
-        return ErrorManager.getInstance().generarReporteHTML();
+    public String getReporteSimbolosHTML() {
+        try {
+            if (entornoGlobal == null) return "Ejecuta el código primero.";
+            return new TablaSimbolos(entornoGlobal.getHistoricoSimbolos()).generarReporteHTML();
+        } catch (Exception e) {
+            return "Error al generar tabla de símbolos: " + e.getMessage();
+        }
     }
 
-    public String getReporteTokens() {
-        return TablaTokens.getInstance().generarReporte();
-    }
-
-    public String getReporteTokensHTML() {
-        return TablaTokens.getInstance().generarReporteHTML();
-    }
-
-    public boolean hayErrores() {
-        return ErrorManager.getInstance().hayErrores();
+    public String getReporteASTHTML() {
+        try {
+            ReporteAST rpt = new ReporteAST();
+            if (ast != null) rpt.setRaiz(ast);
+            return rpt.generarReporteHTML();
+        } catch (Exception e) {
+            return "Error al generar reporte AST: " + e.getMessage();
+        }
     }
 }
