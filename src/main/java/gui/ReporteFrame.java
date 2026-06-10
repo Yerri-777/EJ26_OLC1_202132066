@@ -2,11 +2,17 @@ package gui;
 
 import javax.swing.*;
 import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.StyleSheet;
 import java.awt.*;
 
 /**
  * ReporteFrame — Ventana flotante para mostrar los reportes del compilador.
+ *
+ * Reutilizable: recibe un título y HTML ya generado.
+ * Soporta los 4 reportes del PDF:
+ *   - Reporte de Errores
+ *   - Tabla de Tokens
+ *   - Tabla de Símbolos (Fase 2)
+ *   - Reporte de AST    (Fase 2)
  */
 public class ReporteFrame extends JFrame {
 
@@ -20,19 +26,10 @@ public class ReporteFrame extends JFrame {
 
         // ── JEditorPane para renderizar HTML ───────────────────────────────
         JEditorPane visor = new JEditorPane();
-        HTMLEditorKit kit = new HTMLEditorKit();
-        visor.setEditorKit(kit);
-        
-        // Mejora visual: CSS básico para que las tablas y textos se vean bien
-        StyleSheet style = kit.getStyleSheet();
-        style.addRule("body { font-family: sans-serif; padding: 10px; }");
-        style.addRule("table { border-collapse: collapse; width: 100%; }");
-        style.addRule("th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }");
-        style.addRule("th { background-color: #f2f2f2; }");
-
+        visor.setEditorKit(new HTMLEditorKit());
         visor.setEditable(false);
         visor.setText(html);
-        visor.setCaretPosition(0); 
+        visor.setCaretPosition(0);  // Scroll al inicio
 
         JScrollPane scroll = new JScrollPane(visor);
         scroll.getVerticalScrollBar().setUnitIncrement(16);

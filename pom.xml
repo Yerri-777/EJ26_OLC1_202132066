@@ -1,12 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             http://www.apache.org/xsd/maven-4.0.0.xsd">
-
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>com.mycompany</groupId>
     <artifactId>GoLiteCompiler</artifactId>
     <version>1.0-SNAPSHOT</version>
@@ -15,7 +9,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
-        <exec.mainClass>com.mycompany.golitecompiler.Main</exec.mainClass>
+        <exec.mainClass>com.mycompany.golitecompiler.GoLiteCompiler</exec.mainClass>
     </properties>
 
     <dependencies>
@@ -28,9 +22,8 @@
 
     <build>
         <plugins>
-
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
+                <groupId>maven-plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
@@ -48,22 +41,16 @@
                 <groupId>de.jflex</groupId>
                 <artifactId>jflex-maven-plugin</artifactId>
                 <version>1.9.1</version>
-
                 <executions>
                     <execution>
                         <goals>
                             <goal>generate</goal>
                         </goals>
-
                         <configuration>
                             <outputDirectory>src/main/java</outputDirectory>
-
                             <lexDefinitions>
-                                <lexDefinition>
-                                    src/main/jflex/Lexer.jflex
-                                </lexDefinition>
+                                <lexDefinition>src/main/jflex</lexDefinition>
                             </lexDefinitions>
-
                         </configuration>
                     </execution>
                 </executions>
@@ -73,25 +60,18 @@
                 <groupId>com.github.vbmacher</groupId>
                 <artifactId>cup-maven-plugin</artifactId>
                 <version>11b-20160615</version>
-
                 <executions>
                     <execution>
                         <goals>
                             <goal>generate</goal>
                         </goals>
-
                         <configuration>
                             <outputDirectory>src/main/java</outputDirectory>
-                            <cupDefinition>src/main/cup/Parser.cup</cupDefinition>
-                            <className>Parser</className>
-                            <symbolsName>sym</symbolsName>
+                            <cupDefinition>src/main/cup/parser.cup</cupDefinition>
                         </configuration>
-
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
-
 </project>

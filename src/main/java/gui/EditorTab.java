@@ -3,15 +3,18 @@ package gui;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.text.*;
 import java.awt.*;
 import java.io.File;
 
 /**
  * EditorTab — Panel de un archivo abierto en el IDE.
- * * Contiene:
- * - JTextArea con el código fuente
- * - Columna de números de línea sincronizada
- * - Tracking de modificaciones automático con feedback en el título del Tab
+ *
+ * Contiene:
+ *  - JTextArea con el código fuente
+ *  - Columna de números de línea (PDF exige mostrar línea actual)
+ *  - Tracking de modificaciones (para saber si guardar antes de cerrar)
+ *  - Referencia al File en disco (null si es nuevo archivo sin guardar)
  */
 public class EditorTab extends JPanel {
 
@@ -21,8 +24,8 @@ public class EditorTab extends JPanel {
     private boolean modificado = false;
 
     // ─── Componentes de UI ─────────────────────────────────────────────────────
-    protected final JTextArea  areaTexto;
-    private LineNumberPanel numerosLinea;
+    private final JTextArea    areaTexto;
+    private final LineNumberPanel numerosLinea;
 
     // ──────────────────────────────────────────────────────────────────────────
     public EditorTab(String nombre, File archivo) {
@@ -50,9 +53,6 @@ public class EditorTab extends JPanel {
 
         // ── Números de línea ───────────────────────────────────────────────
         numerosLinea = new LineNumberPanel(areaTexto);
-        
-        // Repintar los números de línea cuando el cursor se mueva
-        areaTexto.addCaretListener(e -> numerosLinea.repaint());
 
         // ── ScrollPane ─────────────────────────────────────────────────────
         JScrollPane scroll = new JScrollPane(areaTexto);
@@ -65,57 +65,40 @@ public class EditorTab extends JPanel {
 
     // ─── API pública ───────────────────────────────────────────────────────────
 
-    public String  getNombre()               { return nombre;   }
-    public File    getArchivo()              { return archivo;  }
-    public String  getContenido()            { return areaTexto.getText(); }
-    public boolean tieneModificaciones()     { return modificado; }
+    public String  getNombre()              { return nombre;     }
+    public File    getArchivo()             { return archivo;    }
+    public String  getContenido()           { return areaTexto.getText(); }
+    public boolean tieneModificaciones()    { return modificado; }
 
     public void setContenido(String texto) {
         areaTexto.setText(texto);
         areaTexto.setCaretPosition(0);
         modificado = false;
-        actualizarTituloEnTab(); // Limpiar el asterisco
     }
 
     public void setArchivo(File archivo) {
         this.archivo = archivo;
         this.nombre  = archivo.getName();
-        actualizarTituloEnTab();
     }
 
     public void marcarGuardado() {
         modificado = false;
-        actualizarTituloEnTab();
     }
 
     private void marcarModificado() {
         if (!modificado) {
             modificado = true;
-            actualizarTituloEnTab();
-        }
-    }
-
-    /**
-     * Notifica a la pestaña padre que debe actualizar el título con asterisco.
-     * Busca dinámicamente el JTabbedPane contenedor.
-     */
-    private void actualizarTituloEnTab() {
-        Component t = this.getParent();
-        while (t != null && !(t instanceof JTabbedPane)) {
-            t = t.getParent();
-        }
-        if (t instanceof JTabbedPane tabbedPane) {
-            int idx = tabbedPane.indexOfComponent(this);
-            if (idx != -1) {
-                String titulo = nombre + (modificado ? " *" : "");
-                tabbedPane.setTitleAt(idx, titulo);
-            }
         }
     }
 
     // ─── Panel interno de números de línea ─────────────────────────────────────
 
+    /**
+     * Componente que renderiza los números de línea junto al editor.
+     * Sincroniza automáticamente con el scroll del JTextArea.
+     */
     private static class LineNumberPanel extends JPanel {
+
         private final JTextArea textArea;
         private static final int ANCHO = 45;
 
@@ -124,6 +107,7 @@ public class EditorTab extends JPanel {
             setPreferredSize(new Dimension(ANCHO, 0));
             setBackground(new Color(37, 37, 38));
 
+            // Redibujar cuando el documento cambie
             textArea.getDocument().addDocumentListener(new DocumentListener() {
                 @Override public void insertUpdate(DocumentEvent e)  { repaint(); }
                 @Override public void removeUpdate(DocumentEvent e)  { repaint(); }
@@ -135,7 +119,8 @@ public class EditorTab extends JPanel {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
             FontMetrics fm = textArea.getFontMetrics(textArea.getFont());
             g2.setFont(textArea.getFont());
@@ -144,10 +129,12 @@ public class EditorTab extends JPanel {
             int alturaLinea = fm.getHeight();
             int totalLineas = textArea.getLineCount();
 
+            // Calcular el offset de scroll
             Rectangle clip = g2.getClipBounds();
             int inicioLinea = clip.y / alturaLinea;
             int finLinea    = Math.min(totalLineas, (clip.y + clip.height) / alturaLinea + 1);
 
+            // Número de línea actual (resaltado)
             int lineaActual = 0;
             try {
                 int caretPos = textArea.getCaretPosition();
@@ -159,7 +146,7 @@ public class EditorTab extends JPanel {
                 int y = i * alturaLinea + fm.getAscent() + textArea.getInsets().top;
 
                 if (linea == lineaActual) {
-                    g2.setColor(new Color(200, 200, 200)); 
+                    g2.setColor(new Color(200, 200, 200));  // Línea actual más brillante
                 } else {
                     g2.setColor(new Color(133, 133, 133));
                 }

@@ -1,98 +1,109 @@
 package errores;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
  * Gestor central de errores del compilador GoLite.
- * Blindado: Thread-safe y tolerante a fallos de renderizado.
+ *
+ * Patrón Singleton: una única instancia acumula errores de todas las fases.
+ * Se limpia antes de cada nueva compilación con reset().
+ *
+ * El PDF exige recolectar TODOS los errores, no detenerse en el primero.
+ * Cada fase agrega sus errores aquí; al final se genera el reporte unificado.
  */
 public class ErrorManager {
 
     // ─── Singleton ─────────────────────────────────────────────────────────────
+
     private static ErrorManager instancia;
-    private final List<Error> errores;
 
     private ErrorManager() {
-        this.errores = new ArrayList<>();
+        errores = new ArrayList<>();
     }
 
-    public static synchronized ErrorManager getInstance() {
+    public static ErrorManager getInstance() {
         if (instancia == null) {
             instancia = new ErrorManager();
         }
         return instancia;
     }
 
+    // ─── Estado ────────────────────────────────────────────────────────────────
+
+    private final List<Error> errores;
+
     // ─── API pública ───────────────────────────────────────────────────────────
 
-    public synchronized void reset() {
+    /**
+     * Limpia todos los errores. Llamar antes de cada compilación.
+     */
+    public void reset() {
         errores.clear();
     }
 
-    public synchronized void agregarLexico(String descripcion, int linea, int columna) {
-        errores.add(new Error(TipoError.LEXICO, asegurarString(descripcion), linea, columna));
+    /**
+     * Agrega un error léxico (carácter no reconocido).
+     */
+    public void agregarLexico(String descripcion, int linea, int columna) {
+        errores.add(new Error(TipoError.LEXICO, descripcion, linea, columna));
     }
 
-    public synchronized void agregarSintactico(String descripcion, int linea, int columna) {
-        errores.add(new Error(TipoError.SINTACTICO, asegurarString(descripcion), linea, columna));
+    /**
+     * Agrega un error sintáctico (estructura gramatical inválida).
+     */
+    public void agregarSintactico(String descripcion, int linea, int columna) {
+        errores.add(new Error(TipoError.SINTACTICO, descripcion, linea, columna));
     }
 
-    public synchronized void agregarSemantico(String descripcion, int linea, int columna) {
-        errores.add(new Error(TipoError.SEMANTICO, asegurarString(descripcion), linea, columna));
+    /**
+     * Agrega un error semántico (tipos incompatibles, variable no declarada, etc).
+     */
+    public void agregarSemantico(String descripcion, int linea, int columna) {
+        errores.add(new Error(TipoError.SEMANTICO, descripcion, linea, columna));
     }
 
-    public synchronized void agregar(Error error) {
-        if (error != null) {
-            errores.add(error);
-        }
+    /**
+     * Agrega un error ya construido (útil para el parser CUP).
+     */
+    public void agregar(Error error) {
+        errores.add(error);
     }
 
     // ─── Consultas ─────────────────────────────────────────────────────────────
 
-    /**
-     * Devuelve una copia inmutable de la lista de errores para evitar
-     * modificaciones externas.
-     */
-    public synchronized List<Error> getErrores() {
-        return Collections.unmodifiableList(new ArrayList<>(errores));
-    }
+    public List<Error> getErrores()         { return errores;          }
+    public boolean     hayErrores()         { return !errores.isEmpty(); }
+    public int         totalErrores()       { return errores.size();   }
 
-    public synchronized boolean hayErrores() {
-        return !errores.isEmpty();
-    }
-
-    public synchronized int totalErrores() {
-        return errores.size();
-    }
-
-    public synchronized boolean hayErroresLexicos() {
+    public boolean hayErroresLexicos() {
         return errores.stream().anyMatch(e -> e.getTipo() == TipoError.LEXICO);
     }
 
-    public synchronized boolean hayErroresSintacticos() {
+    public boolean hayErroresSintacticos() {
         return errores.stream().anyMatch(e -> e.getTipo() == TipoError.SINTACTICO);
     }
 
-    public synchronized boolean hayErroresSemanticos() {
+    public boolean hayErroresSemanticos() {
         return errores.stream().anyMatch(e -> e.getTipo() == TipoError.SEMANTICO);
     }
 
-    // ─── Reporte en texto ──────────────────────────────────────────────────────
+    // ─── Reporte ───────────────────────────────────────────────────────────────
 
-    public synchronized String generarReporte() {
+    /**
+     * Genera el reporte de errores como string formateado.
+     * Listo para mostrarse en la GUI o guardarse como archivo.
+     */
+    public String generarReporte() {
         if (errores.isEmpty()) {
             return "✓ No se encontraron errores.\n";
         }
 
         StringBuilder sb = new StringBuilder();
-        String separador =
-                "+------+-----------------------------------------------+--------+---------+------------+\n";
+        String separador = "+------+-----------------------------------------------+--------+---------+------------+\n";
 
         sb.append("\n").append(separador);
-        sb.append(String.format(
-                "| %-4s | %-45s | %-6s | %-7s | %-10s |\n",
+        sb.append(String.format("| %-4s | %-45s | %-6s | %-7s | %-10s |\n",
                 "No.", "Descripción", "Línea", "Columna", "Tipo"));
         sb.append(separador);
 
@@ -106,87 +117,57 @@ public class ErrorManager {
         return sb.toString();
     }
 
-    // ─── Reporte HTML ──────────────────────────────────────────────────────────
-
-    public synchronized String generarReporteHTML() {
+    /**
+     * Genera el reporte en formato HTML para mostrar en ventana de reportes.
+     */
+    public String generarReporteHTML() {
         StringBuilder sb = new StringBuilder();
-
         sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'>");
         sb.append("<style>");
-        sb.append("body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;");
-        sb.append("margin:20px;background:#1e1e1e;color:#d4d4d4;}");
-        sb.append("h2{color:#569cd6;border-bottom:2px solid #569cd6;padding-bottom:10px;}");
-        sb.append("table{border-collapse:collapse;width:100%;margin-top:20px;}");
-        sb.append("th{background:#264f78;color:white;padding:10px;text-align:left;}");
-        sb.append("td{padding:8px;border-bottom:1px solid #3c3c3c;}");
-        sb.append(".lexico{color:#f48771;font-weight:bold;}");
-        sb.append(".sintactico{color:#dcdcaa;font-weight:bold;}");
-        sb.append(".semantico{color:#ce9178;font-weight:bold;}");
+        sb.append("body{font-family:monospace;margin:20px;background:#1e1e1e;color:#d4d4d4;}");
+        sb.append("h2{color:#569cd6;}");
+        sb.append("table{border-collapse:collapse;width:100%;}");
+        sb.append("th{background:#264f78;color:white;padding:8px;text-align:left;}");
+        sb.append("td{padding:6px 8px;border-bottom:1px solid #3c3c3c;}");
+        sb.append(".lexico{color:#f48771;}");
+        sb.append(".sintactico{color:#dcdcaa;}");
+        sb.append(".semantico{color:#ce9178;}");
         sb.append("tr:hover{background:#2d2d2d;}");
-        sb.append("</style>");
-        sb.append("</head><body>");
-
+        sb.append("</style></head><body>");
         sb.append("<h2>Reporte de Errores — GoLite</h2>");
 
         if (errores.isEmpty()) {
-
-            sb.append("<p style='color:#4ec9b0;'>✓ Compilación exitosa: No se encontraron errores.</p>");
-
+            sb.append("<p style='color:#4ec9b0;'>✓ No se encontraron errores.</p>");
         } else {
-
             sb.append("<table>");
-            sb.append("<tr>");
-            sb.append("<th>No.</th>");
-            sb.append("<th>Descripción</th>");
-            sb.append("<th>Línea</th>");
-            sb.append("<th>Columna</th>");
-            sb.append("<th>Tipo</th>");
-            sb.append("</tr>");
-
+            sb.append("<tr><th>No.</th><th>Descripción</th><th>Línea</th><th>Columna</th><th>Tipo</th></tr>");
             for (int i = 0; i < errores.size(); i++) {
-
                 Error e = errores.get(i);
-
-                String css = (e.getTipo() != null)
-                        ? e.getTipo().name().toLowerCase()
-                        : "desconocido";
-
+                String css = e.getTipo().name().toLowerCase();
                 sb.append(String.format(
-                        "<tr><td>%d</td><td>%s</td><td>%d</td><td>%d</td><td class='%s'>%s</td></tr>",
-                        i + 1,
-                        escapeHTML(e.getDescripcion()),
-                        e.getLinea(),
-                        e.getColumna(),
-                        css,
-                        e.getTipo()
+                    "<tr><td>%d</td><td>%s</td><td>%d</td><td>%d</td><td class='%s'>%s</td></tr>",
+                    i + 1,
+                    escapeHTML(e.getDescripcion()),
+                    e.getLinea(),
+                    e.getColumna(),
+                    css,
+                    e.getTipo().name().toLowerCase()
                 ));
             }
-
             sb.append("</table>");
-            sb.append(String.format(
-                    "<p><strong>Total: %d error(es) detectados.</strong></p>",
-                    errores.size()));
+            sb.append(String.format("<p><strong>Total: %d error(es)</strong></p>", errores.size()));
         }
 
         sb.append("</body></html>");
-
         return sb.toString();
     }
 
     // ─── Utilidades ────────────────────────────────────────────────────────────
 
     private String escapeHTML(String texto) {
-        return (texto == null)
-                ? ""
-                : texto.replace("&", "&amp;")
-                       .replace("<", "&lt;")
-                       .replace(">", "&gt;")
-                       .replace("\"", "&quot;");
-    }
-
-    private String asegurarString(String str) {
-        return (str == null || str.trim().isEmpty())
-                ? "Error desconocido"
-                : str;
+        return texto.replace("&","&amp;")
+                    .replace("<","&lt;")
+                    .replace(">","&gt;")
+                    .replace("\"","&quot;");
     }
 }
