@@ -3,14 +3,10 @@ package entorno;
 import gui.Reportable;
 import java.util.List;
 
-/**
- * TablaSimbolos — Genera el reporte de tabla de símbolos.
- *
- * Implementa Reportable (interfaz del paquete gui) para POO consistente.
- *
- * El PDF exige:
- *   ID | Tipo símbolo | Tipo dato | Ámbito | Línea | Columna
- */
+
+ //TablaSimbolos — Genera el reporte de tabla de símbolos.
+ //  ID | Tipo símbolo | Tipo dato | Ámbito | Línea | Columna
+ 
 public class TablaSimbolos implements Reportable {
 
     private List<Simbolo> simbolos;
@@ -25,7 +21,7 @@ public class TablaSimbolos implements Reportable {
     @Override
     public void reset() { simbolos.clear(); }
 
-    // ─── Reporte texto plano ───────────────────────────────────────────────────
+    // Reporte texto plano 
 
     @Override
     public String generarReporte() {
@@ -45,7 +41,7 @@ public class TablaSimbolos implements Reportable {
         return sb.toString();
     }
 
-    // ─── Reporte HTML ──────────────────────────────────────────────────────────
+    //  Reporte HTML 
 
     @Override
     public String generarReporteHTML() {

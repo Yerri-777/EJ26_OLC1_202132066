@@ -4,13 +4,11 @@ import entorno.Entorno;
 import errores.ErrorManager;
 import java.util.List;
 
-/**
- * NodoPrintln — Representa la llamada a la función embebida fmt.Println.
- * Evalúa una lista de expresiones y concatena sus resultados.
- */
-public class Nodoprintln /* implements Instruccion / extends NodoAST */ {
 
-    private final List<Nodo> expresiones; // Puede recibir múltiples argumentos: fmt.Println("A", 1, true)
+public class Nodoprintln  {
+
+    private final List<Nodo> expresiones; 
+// Puede recibir múltiples argumentos: fmt.Println("A", 1, true)
     private final int linea;
     private final int columna;
 
@@ -43,8 +41,8 @@ public class Nodoprintln /* implements Instruccion / extends NodoAST */ {
             }
             
             // Aquí deberías concatenar esto a tu consola principal
-            // Por ejemplo: compilador.Compiler.getInstance().appendConsola(salida.toString() + "\n");
-            System.out.println(salida.toString()); // Salida estándar de respaldo
+            
+            System.out.println(salida.toString()); 
 
         } catch (Exception e) {
             ErrorManager.getInstance().agregarSemantico(

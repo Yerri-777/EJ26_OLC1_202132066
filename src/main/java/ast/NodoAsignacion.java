@@ -5,8 +5,7 @@ import errores.ErrorManager;
 
 /**
  * NodoAsignacion — id = expr
- * Blindado: Reporta variables no declaradas o incompatibilidad de tipos 
- * sin detener el intérprete. Permite conversión implícita int → float64.
+ * Permite conversión implícita int → float64.
  */
 public class NodoAsignacion extends NodoSentencia {
 
@@ -19,7 +18,7 @@ public class NodoAsignacion extends NodoSentencia {
         this.expresion = expresion;
     }
 
-    // ─── Getters ───────────────────────────────────────────────────────────────
+    // Getters 
     
     public String getNombre() {
         return nombre;
@@ -29,7 +28,7 @@ public class NodoAsignacion extends NodoSentencia {
         return expresion;
     }
 
-    // ─── Ejecución ─────────────────────────────────────────────────────────────
+    // Ejecución 
 
     @Override
     public Object execute(Entorno entorno) {
@@ -39,18 +38,19 @@ public class NodoAsignacion extends NodoSentencia {
                 "La variable '" + nombre + "' no está declarada en este ámbito.",
                 linea, columna
             );
-            return null; // Fallback seguro, abortar asignación
+             // Fallback seguro, abortar asignación
+            return null;
         }
 
         Object nuevoValor = expresion.getValue(entorno);
         
-        // Si la expresión falló (ej. división por cero o variable no resuelta), no asignamos nada
+        // Si la expresión falló 
         if (nuevoValor == null) return null;
 
         String tipoActual = entorno.obtenerTipo(nombre);
         String tipoNuevo  = inferirTipo(nuevoValor);
 
-        // Conversión implícita int → float64
+        // Conversión implícita int float64
         if ("float64".equals(tipoActual) && "int".equals(tipoNuevo)) {
             nuevoValor = ((Integer) nuevoValor).doubleValue();
             tipoNuevo  = "float64";

@@ -3,12 +3,6 @@ package ast;
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 
-/**
- * NodoStrconvParseFloat — strconv.ParseFloat(expr)
- *
- * Convierte string → float64.
- * Los enteros también son válidos ("123" → 123.0).
- */
 public class NodoStrconvParseFloat extends NodoExpresion {
 
     private final NodoExpresion argumento;

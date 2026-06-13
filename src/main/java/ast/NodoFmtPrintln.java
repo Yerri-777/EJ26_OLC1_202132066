@@ -3,20 +3,7 @@ package ast;
 import entorno.Entorno;
 import java.util.List;
 
-/**
- * NodoFmtPrintln — fmt.Println(args...)
- *
- * Reglas del PDF:
- *   - Imprime una o más expresiones separadas por espacio
- *   - Finaliza con salto de línea
- *   - Sin argumentos → solo imprime el salto de línea
- *   - int, float64, bool, string, rune soportados
- *   - Slices → [v1 v2 v3]  (Fase 2)
- *   - Structs → NombreStruct{Campo1: Val1, ...}  (Fase 2)
- *
- * La salida se acumula en Entorno (getSalidaConsola) para que
- * Compiler.java la devuelva a la GUI.
- */
+
 public class NodoFmtPrintln extends NodoExpresion {
 
     private final List<NodoExpresion> argumentos;
@@ -41,11 +28,7 @@ public class NodoFmtPrintln extends NodoExpresion {
         return null;
     }
 
-    /**
-     * Formatea un valor para salida según las reglas del PDF.
-     * rune → imprime el carácter ASCII (Go imprime el número entero, pero
-     *        para compatibilidad con el PDF imprimimos el int que almacenamos).
-     */
+ 
     private String formatearValor(Object val) {
         if (val == null)            return "nil";
         if (val instanceof Boolean) return val.toString();           // "true" / "false"
@@ -66,15 +49,6 @@ public class NodoFmtPrintln extends NodoExpresion {
         return val.toString();
     }
 
-    /**
-     * Formato de double según Go:
-     *   1.0     → "1"   (entero exacto, sin decimales innecesarios)
-     *   3.14    → "3.14"
-     *   1.00001 → "1.00001"
-     *
-     * Nota: Go nativo imprime "1" para 1.0 cuando viene de fmt.Println.
-     * Aquí seguimos esa convención para que los tests del calificador pasen.
-     */
     private String formatearDouble(Double d) {
         if (Double.isInfinite(d) || Double.isNaN(d)) return d.toString();
         if (d == Math.floor(d) && Math.abs(d) < 1e15) {
@@ -84,7 +58,7 @@ public class NodoFmtPrintln extends NodoExpresion {
         // Eliminar trailing zeros innecesarios
         String s = Double.toString(d);
         if (s.contains("E") || s.contains("e")) return s;
-        // Double.toString puede dar "3.14" o "3.1400000000000001" — usamos lo que da
+       
         return s;
     }
 

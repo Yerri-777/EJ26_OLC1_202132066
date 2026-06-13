@@ -3,12 +3,7 @@ package tokens;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Gestiona la lista de tokens reconocidos por el Lexer.
- *
- * Se usa para generar el "Reporte de Tabla de Tokens" que exige el PDF.
- * El Lexer llena esta lista durante el análisis.
- */
+
 public class TablaTokens {
 
     private static TablaTokens instancia;
@@ -30,7 +25,7 @@ public class TablaTokens {
     public List<Token> getTokens()            { return tokens;      }
     public int         totalTokens()          { return tokens.size(); }
 
-    // ─── Reporte texto plano ───────────────────────────────────────────────────
+    //  Reporte texto plano 
 
     public String generarReporte() {
         StringBuilder sb = new StringBuilder();
@@ -50,7 +45,7 @@ public class TablaTokens {
         return sb.toString();
     }
 
-    // ─── Reporte HTML ──────────────────────────────────────────────────────────
+    //  Reporte HTML 
 
     public String generarReporteHTML() {
         StringBuilder sb = new StringBuilder();

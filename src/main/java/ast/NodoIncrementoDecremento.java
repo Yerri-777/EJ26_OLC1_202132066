@@ -3,16 +3,12 @@ package ast;
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 
-/**
- * NodoIncrementoDecremento — id++  |  id--
- *
- * Solo válido sobre variables numéricas (int o float64).
- * Muy usado en los for clásicos del PDF.
- */
+
 public class NodoIncrementoDecremento extends NodoSentencia {
 
     private final String nombre;
-    private final String operador;  // "++" o "--"
+    private final String operador; 
+    // "++" o "--"
 
     public NodoIncrementoDecremento(String nombre, String operador,
                                      int linea, int columna) {

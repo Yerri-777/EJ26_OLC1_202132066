@@ -3,20 +3,7 @@ package ast;
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 
-/**
- * NodoDeclaracionVar — Declaración de variable.
- *
- * Tres formas del PDF:
- *   var id tipo = expr   → explicit = true,  tipo != null, expr != null
- *   var id tipo          → explicit = true,  tipo != null, expr == null
- *   id := expr           → explicit = false, tipo == null, expr != null
- *
- * Reglas del PDF:
- *   - Una variable no puede redeclararse en el mismo ámbito
- *   - El tipo no puede cambiar una vez declarado
- *   - Conversión implícita int → float64 permitida
- *   - Valor por defecto cuando no hay inicializador
- */
+
 public class NodoDeclaracionVar extends NodoSentencia {
 
     private final String        nombre;
@@ -72,19 +59,19 @@ public class NodoDeclaracionVar extends NodoSentencia {
     }
 
     /**
-     * Valida compatibilidad de tipos y aplica conversión implícita int→float64.
+     * Valida compatibilidad de tipos y aplica conversión implícita 
      */
     private Object convertirYValidar(Object valor, String tipoDeclarado) {
         if (valor == null) return null;  // nil
 
         String tipoValor = inferirTipo(valor);
 
-        // Conversión implícita int → float64 (PDF lo permite explícitamente)
+        // Conversión implícita int  float64 (
         if (tipoDeclarado.equals("float64") && tipoValor.equals("int")) {
             return ((Integer) valor).doubleValue();
         }
 
-        // Tipos idénticos → OK
+        // Tipos idénticos OK
         if (tipoDeclarado.equals(tipoValor)) return valor;
 
         // rune es alias de int en nuestro modelo
@@ -104,7 +91,7 @@ public class NodoDeclaracionVar extends NodoSentencia {
         if (valor instanceof String)  return "string";
         if (valor instanceof Boolean) return "bool";
         if (valor instanceof Character) return "rune";
-        return "nil";  // null → nil (tipo válido para tipos referencia)
+        return "nil";  
     }
 
     @Override

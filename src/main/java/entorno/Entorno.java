@@ -1,80 +1,82 @@
 package entorno;
 
 import ast.NodoFuncion;
+import ast.NodoParametro;
+import ast.NodoTipo;
+import ast.NodoBloque;
 import errores.ErrorManager;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Entorno — Tabla de símbolos encadenada.
- * Blindado: Tolerante a errores, reporta al ErrorManager sin lanzar excepciones críticas.
- */
+//
+ // Entorno — Tabla de símbolos encadenada y gestor de funciones.
+ 
 public class Entorno {
 
-    // ─── Centinela para "no encontrado" ───────────────────────────────────────
+    // Centinela para no encontrado
     public static final Object NO_ENCONTRADO = new Object();
 
-    // ─── Estado del entorno ───────────────────────────────────────────────────
+    // Estado del entorno 
     private final Map<String, Simbolo> tabla;
-    private final Entorno              padre;
-    private final String               nombreAmbito;
+    private final Entorno padre;
+    private final String nombreAmbito;
 
-    // ─── Solo en el entorno global ─────────────────────────────────────────────
+    //Solo en el entorno global 
     private final Map<String, NodoFuncion> funciones;
-    private final StringBuilder            salidaConsola;
-    private final List<Simbolo>            historicoSimbolos;
+    private final StringBuilder salidaConsola;
+    private final List<Simbolo> historicoSimbolos;
 
-    // ─── Constructor para entorno global ──────────────────────────────────────
+    // Constructores
+    // Contructor para entorno global
     public Entorno() {
-        this.tabla             = new HashMap<>();
-        this.padre             = null;
-        this.nombreAmbito      = "Global";
-        this.funciones         = new HashMap<>();
-        this.salidaConsola     = new StringBuilder();
+        this.tabla = new HashMap<>();
+        this.padre = null;
+        this.nombreAmbito = "Global";
+        this.funciones = new HashMap<>();
+        this.salidaConsola = new StringBuilder();
         this.historicoSimbolos = new ArrayList<>();
     }
 
-    // ─── Constructor para entorno hijo (función, bloque) ──────────────────────
+    // Constructor para entorno hijo (bloque independiente, if, for)
     public Entorno(Entorno padre) {
-        this.tabla             = new HashMap<>();
-        this.padre             = padre;
-        this.nombreAmbito      = padre != null ? padre.getNombreAmbito() : "Global";
-        this.funciones         = null;
-        this.salidaConsola     = null;
+        this.tabla = new HashMap<>();
+        this.padre = padre;
+        this.nombreAmbito = padre != null ? padre.getNombreAmbito() + "->Bloque" : "Bloque";
+        this.funciones = null;
+        this.salidaConsola = null;
         this.historicoSimbolos = null;
     }
 
-    // ─── Constructor para entorno de función (tiene nombre propio) ────────────
+    // Constructor para entorno de función
     public Entorno(Entorno padre, String nombreFuncion) {
-        this.tabla             = new HashMap<>();
-        this.padre             = padre;
-        this.nombreAmbito      = nombreFuncion != null ? nombreFuncion : "Funcion_Desconocida";
-        this.funciones         = null;
-        this.salidaConsola     = null;
+        this.tabla = new HashMap<>();
+        this.padre = padre;
+        this.nombreAmbito = nombreFuncion != null ? nombreFuncion : "Funcion_Desconocida";
+        this.funciones = null;
+        this.salidaConsola = null;
         this.historicoSimbolos = null;
     }
 
     // ─── Getters simples ──────────────────────────────────────────────────────
-    public String  getNombreAmbito() { return nombreAmbito; }
-    public Entorno getPadre()        { return padre;        }
+    public String getNombreAmbito() { return nombreAmbito; }
+    public Entorno getPadre() { return padre; }
 
-    // ══════════════════════════════════════════════════════════════════════════
+  
     // VARIABLES
-    // ══════════════════════════════════════════════════════════════════════════
+
 
     public void declarar(String nombre, String tipo, Object valor) {
-        declarar(nombre, tipo, valor, 0, 0); // Redirige a la versión completa
+        declarar(nombre, tipo, valor, 0, 0); 
     }
 
     public void declarar(String nombre, String tipo, Object valor, int linea, int col) {
         if (tabla.containsKey(nombre)) {
-            // [CAMBIO ROBUSTO] Reportar y continuar (No lanzar Exception)
             ErrorManager.getInstance().agregarSemantico(
-                "La variable '" + nombre + "' ya fue declarada en este ámbito.", linea, col
+                "La variable '" + nombre + "' ya fue declarada en el ámbito '" + nombreAmbito + "'.", linea, col
             );
-            return; // Detenemos la declaración, pero no el compilador
+            return; 
         }
         
         Simbolo s = new Simbolo(
@@ -94,7 +96,7 @@ public class Entorno {
     public String obtenerTipo(String nombre) {
         if (tabla.containsKey(nombre)) return tabla.get(nombre).getTipoDato();
         if (padre != null) return padre.obtenerTipo(nombre);
-        return "desconocido"; // Retorno más seguro que null
+        return "desconocido"; 
     }
 
     public void asignar(String nombre, Object valor) {
@@ -111,16 +113,39 @@ public class Entorno {
         return tabla.containsKey(nombre);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // FUNCIONES
-    // ══════════════════════════════════════════════════════════════════════════
+    public void imprimirVariables() {
+        if (this.tabla.isEmpty()) {
+            System.out.println("   [" + nombreAmbito + "] (Sin variables locales activas)");
+        } else {
+            for (Map.Entry<String, Simbolo> entrada : this.tabla.entrySet()) {
+                Simbolo sim = entrada.getValue();
+                System.out.println("   [" + nombreAmbito + "] " + entrada.getKey() + " = " 
+                    + (sim.getValor() != null ? sim.getValor() : "nil") 
+                    + " (" + sim.getTipoDato() + ")");
+            }
+        }
+        if (this.padre != null) {
+            this.padre.imprimirVariables();
+        }
+    }
 
+ 
+    // FUNCIONES 
+
+    
     public void declararFuncion(String nombre, NodoFuncion funcion) {
         Entorno global = getGlobal();
         if (global.funciones.containsKey(nombre)) {
-            // [CAMBIO ROBUSTO] Reportar y continuar
             ErrorManager.getInstance().agregarSemantico(
                 "La función '" + nombre + "' ya está declarada.", 
+                funcion.getLinea(), funcion.getColumna()
+            );
+            return;
+        }
+        
+        if (global.tabla.containsKey(nombre)) {
+            ErrorManager.getInstance().agregarSemantico(
+                "Ya existe una variable con el nombre '" + nombre + "'. No se puede declarar la función.", 
                 funcion.getLinea(), funcion.getColumna()
             );
             return;
@@ -136,35 +161,81 @@ public class Entorno {
         global.agregarHistorico(s);
     }
 
+    public void registrarFuncionNativa(String nombre, String tipoRetorno) {
+        Entorno global = getGlobal();
+        if (global.tabla.containsKey(nombre)) return;
+
+        Simbolo s = new Simbolo(
+            nombre, 
+            Simbolo.TipoSimbolo.FUNCION, 
+            tipoRetorno,
+            "Global", 
+            0, 0, 
+            null
+        );
+        global.tabla.put(nombre, s);
+        global.agregarHistorico(s);
+
+        // Registro en el mapa de funciones
+        global.funciones.put(nombre, new NodoFuncionNativa(nombre));
+    }
+
     public NodoFuncion buscarFuncion(String nombre) {
         return getGlobal().funciones.get(nombre);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // SALIDA DE CONSOLA E HISTÓRICO
-    // ══════════════════════════════════════════════════════════════════════════
+    // IMPLEMENTACIÓN DE NODO NATIVO 
+    public static class NodoFuncionNativa extends NodoFuncion {
+        public NodoFuncionNativa(String nombre) {
+            super(nombre, new ArrayList<NodoParametro>(), null, null, 0, 0);
+        }
 
+        @Override
+        public Object execute(Entorno entorno) {
+            return null;
+        }
+
+        @Override
+        public Object ejecutarCon(Entorno entornoLlamada, List<Object> valores) {
+            return null;
+        }
+    }
+
+
+    // SALIDA Y UTILIDADES
+
+    
     public void agregarSalida(String texto) {
         if (texto != null) {
-            getGlobal().salidaConsola.append(texto);
+            Entorno global = getGlobal();
+            if (global.salidaConsola != null) {
+                global.salidaConsola.append(texto);
+            }
         }
     }
 
     public String getSalidaConsola() {
-        return getGlobal().salidaConsola.toString();
+        Entorno global = getGlobal();
+        return (global.salidaConsola != null) ? global.salidaConsola.toString() : "";
     }
 
     private void agregarHistorico(Simbolo s) {
-        getGlobal().historicoSimbolos.add(s);
+        Entorno global = getGlobal();
+        if (global.historicoSimbolos != null) {
+            global.historicoSimbolos.add(s);
+        }
     }
 
     public List<Simbolo> getHistoricoSimbolos() {
-        return getGlobal().historicoSimbolos;
+        Entorno global = getGlobal();
+        return (global.historicoSimbolos != null) ? global.historicoSimbolos : new ArrayList<>();
     }
 
     private Entorno getGlobal() {
         Entorno e = this;
-        while (e.padre != null) e = e.padre;
+        while (e.padre != null) {
+            e = e.padre;
+        }
         return e;
     }
 }

@@ -9,33 +9,18 @@ import java.awt.event.*;
 import java.io.*;
 import java.nio.file.*;
 
-/**
- * MainFrame — Ventana principal del IDE GoLite.
- *
- * Estructura visual (según boceto del PDF):
- * ┌─────────────────────────────────────────────────────┐
- * │  [Archivo]  [Herramientas]  [Reportes]  [▶ Ejecutar]│  ← Menú + toolbar
- * ├─────────────────────────────────────────────────────┤
- * │  [main.glt ×]  [otro.glt ×]                         │  ← Tabs editor
- * │                                                     │
- * │    Editor de código con número de líneas            │
- * │                                                     │
- * ├─────────────────────────────────────────────────────┤
- * │  [Consola]                                          │  ← Tab consola
- * │  > Ejecutando...                                    │
- * └─────────────────────────────────────────────────────┘
- */
+
 public class MainFrame extends JFrame {
 
-    // ─── Componentes principales ───────────────────────────────────────────────
-    private JTabbedPane  tabbedEditor;   // Tabs con archivos abiertos
-    private ConsolaPanel consolaPanel;   // Panel inferior de consola
-    private JSplitPane   splitPane;      // Divide editor y consola
+    // Componentes principales 
+    private JTabbedPane  tabbedEditor;   
+    private ConsolaPanel consolaPanel;  
+    private JSplitPane   splitPane;     
 
-    // ─── Contador para nuevos archivos ─────────────────────────────────────────
+    // Contador para nuevos archivos 
     private int contadorNuevo = 1;
 
-    // ──────────────────────────────────────────────────────────────────────────
+  
     public MainFrame() {
         super("GoLite IDE");
         configurarVentana();
@@ -44,7 +29,7 @@ public class MainFrame extends JFrame {
         setVisible(true);
     }
 
-    // ─── Configuración base de la ventana ─────────────────────────────────────
+    //  Configuración base de la ventana 
 
     private void configurarVentana() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -52,9 +37,9 @@ public class MainFrame extends JFrame {
         setMinimumSize(new Dimension(900, 600));
         setLocationRelativeTo(null);
 
-        // Icono de la aplicación (si existe en resources)
+        // Icono de la aplicación 
         try {
-            // setIconImage(ImageIO.read(getClass().getResource("/icon.png")));
+        
         } catch (Exception ignored) {}
 
         // Look and Feel del sistema operativo
@@ -64,7 +49,7 @@ public class MainFrame extends JFrame {
         } catch (Exception ignored) {}
     }
 
-    // ─── Construcción de la interfaz ───────────────────────────────────────────
+    //  Construcción de la interfaz
 
     private void construirUI() {
         setJMenuBar(crearMenuBar());
@@ -91,7 +76,7 @@ public class MainFrame extends JFrame {
         add(splitPane,  BorderLayout.CENTER);
     }
 
-    // ─── Menú principal ────────────────────────────────────────────────────────
+    // Menú principal 
 
     private JMenuBar crearMenuBar() {
         JMenuBar menuBar = new JMenuBar();
@@ -155,7 +140,7 @@ public class MainFrame extends JFrame {
 
         JMenuItem itemErrores = new JMenuItem("Reporte de Errores");
         JMenuItem itemTokens  = new JMenuItem("Tabla de Tokens");
-        // Preparados para Día 2/4:
+
         JMenuItem itemSimbolos = new JMenuItem("Tabla de Símbolos  (Fase 2)");
         JMenuItem itemAST      = new JMenuItem("Reporte AST        (Fase 2)");
 
@@ -183,7 +168,7 @@ public class MainFrame extends JFrame {
         return menu;
     }
 
-    // ─── Toolbar ───────────────────────────────────────────────────────────────
+    // Toolbar
 
     private JPanel crearToolbar() {
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
@@ -202,14 +187,14 @@ public class MainFrame extends JFrame {
 
     // ─── Acciones de Archivo ───────────────────────────────────────────────────
 
-    /** Abre una nueva pestaña con editor vacío. */
+   
     public void abrirNuevoArchivo() {
         String nombre = "nuevo" + contadorNuevo++ + ".glt";
         EditorTab tab = new EditorTab(nombre, null);
         agregarTab(tab, nombre);
     }
 
-    /** Abre el diálogo para cargar un archivo .glt del disco. */
+ 
     private void abrirArchivo() {
         JFileChooser fc = new JFileChooser();
         fc.setFileFilter(new FileNameExtensionFilter("Archivos GoLite (*.glt)", "glt"));
@@ -230,7 +215,7 @@ public class MainFrame extends JFrame {
         }
     }
 
-    /** Guarda el archivo de la pestaña activa. */
+
     private void guardarArchivo() {
         EditorTab tab = getTabActivo();
         if (tab == null) return;
@@ -250,7 +235,7 @@ public class MainFrame extends JFrame {
         }
     }
 
-    /** Guarda como nuevo archivo .glt. */
+    // Guarda como nuevo archivo .glt
     private void guardarArchivoComo() {
         EditorTab tab = getTabActivo();
         if (tab == null) return;
@@ -279,7 +264,7 @@ public class MainFrame extends JFrame {
         }
     }
 
-    /** Cierra la pestaña activa (con confirmación si hay cambios sin guardar). */
+    //Cierra la pestaña activa (con confirmación si hay cambios sin guardar)
     private void cerrarPestanaActual() {
         int idx = tabbedEditor.getSelectedIndex();
         if (idx == -1) return;
@@ -296,11 +281,7 @@ public class MainFrame extends JFrame {
         tabbedEditor.removeTabAt(idx);
     }
 
-    // ─── Ejecución ─────────────────────────────────────────────────────────────
-
-    /**
-     * Botón ▶ Ejecutar: lanza el compilador sobre el contenido del editor activo.
-     */
+   // ejecucion 
     private void ejecutar() {
         EditorTab tab = getTabActivo();
         if (tab == null) {
@@ -336,7 +317,7 @@ public class MainFrame extends JFrame {
         worker.execute();
     }
 
-    // ─── Reportes ──────────────────────────────────────────────────────────────
+    // Reportes 
 
     private void mostrarReporteErrores() {
         String html = Compiler.getInstance().getReporteErroresHTML();
@@ -350,7 +331,7 @@ public class MainFrame extends JFrame {
         reporte.setVisible(true);
     }
 
-    // ─── Utilidades internas ───────────────────────────────────────────────────
+    // Utilidades internas 
 
     private void agregarTab(EditorTab tab, String titulo) {
         tabbedEditor.addTab(titulo, tab);

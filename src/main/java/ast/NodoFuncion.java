@@ -6,19 +6,7 @@ import excepciones.ErrorSemanticoException;
 import errores.ErrorManager;
 import java.util.List;
 
-/**
- * NodoFuncion — Declaración de una función GoLite.
- *
- * Cubre la sintaxis:
- *   func nombre(params) tipoRetorno { bloque }
- *   func nombre(params)             { bloque }
- *
- * En Fase 1 solo se ejecuta main(). Las funciones user-defined
- * se invocan desde NodoLlamadaFuncion en Fase 2 completa.
- *
- * Los parámetros se pasan por valor (primitivos) o por referencia
- * (structs/slices), según el PDF.
- */
+
 public class NodoFuncion extends Nodo {
 
     private final String              nombre;
@@ -38,7 +26,7 @@ public class NodoFuncion extends Nodo {
         this.cuerpo      = cuerpo;
     }
 
-    // ─── Getters ───────────────────────────────────────────────────────────────
+    // ─Getters 
 
     public String              getNombre()      { return nombre;      }
     public List<NodoParametro> getParametros()  { return parametros;  }
@@ -46,24 +34,14 @@ public class NodoFuncion extends Nodo {
     public NodoBloque          getCuerpo()      { return cuerpo;      }
     public boolean             esVoid()         { return tipoRetorno == null; }
 
-    // ─── Ejecución ─────────────────────────────────────────────────────────────
-
-    /**
-     * Ejecuta la función sin argumentos (para main()).
-     * Con argumentos se usa ejecutarCon(entorno, args).
-     */
+    // Ejecución 
+  
     @Override
     public Object execute(Entorno entorno) {
         return ejecutarCon(entorno, null);
     }
 
-    /**
-     * Ejecuta la función con una lista de valores para los parámetros.
-     *
-     * @param entornoLlamada Entorno desde donde se llama (para resolver los args)
-     * @param valores        Lista de valores evaluados para los parámetros
-     * @return Valor de retorno (null si es void)
-     */
+  
     public Object ejecutarCon(Entorno entornoLlamada, List<Object> valores) {
         // Crear entorno local con el nombre de la función para el reporte de símbolos
         Entorno entornoLocal = new Entorno(entornoLlamada, nombre);
@@ -97,7 +75,7 @@ public class NodoFuncion extends Nodo {
         return null;
     }
 
-    // ─── AST ───────────────────────────────────────────────────────────────────
+    //  AST
 
     @Override
     public String toAST(int nivel) {

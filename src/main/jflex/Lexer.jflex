@@ -7,13 +7,9 @@ import errores.ErrorManager;
 import java.util.ArrayList;
 import java.util.List;
 import parser.sym; 
-import java_cup.runtime.*;
 
 %%
 
-/* ══════════════════════════════════════════════════════════════════════
-   OPCIONES DE JFLEX
-   ══════════════════════════════════════════════════════════════════════ */
 %class  Lexer
 %public
 %unicode
@@ -22,165 +18,144 @@ import java_cup.runtime.*;
 %column
 %char
 
-/* ══════════════════════════════════════════════════════════════════════
-   CÓDIGO JAVA INCRUSTADO EN LA CLASE Lexer
-   ══════════════════════════════════════════════════════════════════════ */
 %{
-    /** Lista de tokens generados. Usada para el reporte de tabla de tokens. */
     private List<Token> listaTokens = new ArrayList<>();
+    
+    
+    private boolean requierePuntoComa = false;
 
-    /**
-     * Crea un Symbol para CUP y además registra el token en la lista
-     * para el reporte.  Línea y columna son base-1 (yyline+1, yycolumn+1).
-     */
     private Symbol token(int tipo, TipoToken tipoToken) {
         Token t = new Token(tipoToken, yytext(), yyline + 1, yycolumn + 1);
         listaTokens.add(t);
+        
+        // Lógica ASI: Evaluamos si este token marca el posible final de una instrucción
+        if (tipo == sym.ID || tipo == sym.ENTERO || tipo == sym.FLOTANTE ||
+            tipo == sym.STRING || tipo == sym.RUNE_LIT || tipo == sym.BOOLEANO ||
+            tipo == sym.NIL || tipo == sym.BREAK || tipo == sym.CONTINUE ||
+            tipo == sym.RETURN || tipo == sym.INCREMENTO || tipo == sym.DECREMENTO ||
+            tipo == sym.PAREN_CIERRA || tipo == sym.LLAVE_CIERRA) {
+            requierePuntoComa = true;
+        } else {
+            requierePuntoComa = false;
+        }
+
         return new Symbol(tipo, yyline + 1, yycolumn + 1, t);
     }
 
-    /**
-     * Registra un error léxico sin crear un Symbol válido.
-     * Permite al parser continuar buscando más errores.
-     */
     private void errorLexico(String lexema) {
         ErrorManager.getInstance().agregarLexico(
-            "El símbolo \"" + lexema + "\" no es reconocido por el lenguaje.",
-            yyline + 1,
-            yycolumn + 1
+            "El símbolo \"" + lexema + "\" no es reconocido.",
+            yyline + 1, yycolumn + 1
         );
     }
 
-    /** Acceso externo a la lista de tokens para el reporte. */
-    public List<Token> getListaTokens() {
-        return listaTokens;
-    }
+    public List<Token> getListaTokens() { return listaTokens; }
 %}
 
-/* ══════════════════════════════════════════════════════════════════════
-   MACROS / DEFINICIONES REUTILIZABLES
-   ══════════════════════════════════════════════════════════════════════ */
+/* MACROS */
+/* Separamos los saltos de línea de los espacios normales para el ASI */
+SaltoLinea     = \r|\n|\r\n
+Espacio        = [ \t\f]+
 
-/* Espacios en blanco: espacio, tab, retorno de carro, nueva línea */
-Espacio        = [ \t\r\n]+
-
-/* Dígitos y letras */
 Digito         = [0-9]
-Letra          = [a-zA-Z]
-LetraOGuion    = [a-zA-Z_]
-
-/* Identificador: empieza con letra o guión bajo, sigue con alfanumérico o guión */
-Identificador  = {LetraOGuion}({LetraOGuion}|{Digito})*
-
-/* Literales numéricos */
+Letra          = [a-zA-Z_]
+Identificador  = {Letra}({Letra}|{Digito})*
 Entero         = {Digito}+
 Flotante       = {Digito}+"."{Digito}+
-
-/* Literales string: comillas dobles, admite secuencias de escape */
-StringLit      = \"([^\"\\]|\\.)*\"
-
-/* Literal rune: comilla simple, un carácter o secuencia de escape */
-RuneLit        = \'([^\'\\]|\\[nrt\\'\"])\'
-
-/* Comentarios */
+StringLit      = \"([^\"\n\r\\]|\\.)*\"
+RuneLit        = \'([^\'\n\r\\]|\\.)\'
 ComLinea       = "//"[^\n]*
-ComBloque      = "/*"([^*]|\*[^/])*"*/"
+ComBloque      = "/*"([^*]|\*+[^/*])*\*+"/"
 
 %%
 
-/* ══════════════════════════════════════════════════════════════════════
-   REGLAS LÉXICAS
-   Orden: más específico primero. JFlex aplica la regla más larga que
-   haga match (maximal munch); en caso de empate, la primera regla.
-   ══════════════════════════════════════════════════════════════════════ */
+/* REGLAS */
 
-/* ── Espacios y comentarios (ignorados) ──────────────────────────── */
-{Espacio}          { /* ignorar */ }
-{ComLinea}         { /* ignorar comentario de línea */ }
-{ComBloque}        { /* ignorar comentario de bloque */ }
+/* INYECCIÓN AUTOMÁTICA DE PUNTO Y COMA */
+{SaltoLinea} {
+    if (requierePuntoComa) {
+        requierePuntoComa = false; // Apagamos bandera para evitar ciclos
+        // Creamos un token ficticio para enviarlo al parser
+        Token t = new Token(TipoToken.PUNTO_COMA, "ASI_;", yyline, yycolumn + 1);
+        listaTokens.add(t);
+        return new Symbol(sym.PUNTO_COMA, yyline + 1, yycolumn + 1, t);
+    }
+}
 
-/* ── Funciones embebidas con punto (ANTES que identificadores) ───── */
-"fmt.Println"           { return token(sym.FMT_PRINTLN,        TipoToken.RES_FMT_PRINTLN);        }
-"strconv.Atoi"          { return token(sym.STRCONV_ATOI,       TipoToken.RES_STRCONV_ATOI);       }
-"strconv.ParseFloat"    { return token(sym.STRCONV_PARSEFLOAT, TipoToken.RES_STRCONV_PARSEFLOAT); }
-"reflect.TypeOf"        { return token(sym.REFLECT_TYPEOF,     TipoToken.RES_REFLECT_TYPEOF);     }
+{Espacio}       { /* ignorar */ }
+{ComLinea}      { /* ignorar, la bandera ASI no se altera aquí */ }
+{ComBloque}     { /* ignorar */ }
 
-/* ── Palabras reservadas (ANTES que identificadores) ──────────────── */
-"var"       { return token(sym.VAR,      TipoToken.RES_VAR);      }
-"func"      { return token(sym.FUNC,     TipoToken.RES_FUNC);     }
-"if"        { return token(sym.IF,       TipoToken.RES_IF);       }
-"else"      { return token(sym.ELSE,     TipoToken.RES_ELSE);     }
-"for"       { return token(sym.FOR,      TipoToken.RES_FOR);      }
-"switch"    { return token(sym.SWITCH,   TipoToken.RES_SWITCH);   }
-"case"      { return token(sym.CASE,     TipoToken.RES_CASE);     }
-"default"   { return token(sym.DEFAULT,  TipoToken.RES_DEFAULT);  }
-"break"     { return token(sym.BREAK,    TipoToken.RES_BREAK);    }
-"continue"  { return token(sym.CONTINUE, TipoToken.RES_CONTINUE); }
-"return"    { return token(sym.RETURN,   TipoToken.RES_RETURN);   }
-"range"     { return token(sym.RANGE,    TipoToken.RES_RANGE);    }
-"struct"    { return token(sym.STRUCT,   TipoToken.RES_STRUCT);   }
+/* Palabras reservadas */
+"var"           { return token(sym.VAR,      TipoToken.RES_VAR);      }
+"func"          { return token(sym.FUNC,     TipoToken.RES_FUNC);     }
+"if"            { return token(sym.IF,       TipoToken.RES_IF);       }
+"else"          { return token(sym.ELSE,     TipoToken.RES_ELSE);     }
+"for"           { return token(sym.FOR,      TipoToken.RES_FOR);      }
+"break"         { return token(sym.BREAK,    TipoToken.RES_BREAK);    }
+"continue"      { return token(sym.CONTINUE, TipoToken.RES_CONTINUE);}
+"return"        { return token(sym.RETURN,   TipoToken.RES_RETURN);   }
 
-/* ── Tipos primitivos (palabras reservadas de tipo) ──────────────── */
-"int"       { return token(sym.TIPO_INT,     TipoToken.TIPO_INT);     }
-"float64"   { return token(sym.TIPO_FLOAT64, TipoToken.TIPO_FLOAT64); }
-"string"    { return token(sym.TIPO_STRING,  TipoToken.TIPO_STRING);  }
-"bool"      { return token(sym.TIPO_BOOL,    TipoToken.TIPO_BOOL);    }
-"rune"      { return token(sym.TIPO_RUNE,    TipoToken.TIPO_RUNE);    }
+/* Tipos */
+"int"           { return token(sym.TIPO_INT,     TipoToken.TIPO_INT);     }
+"float64"       { return token(sym.TIPO_FLOAT64, TipoToken.TIPO_FLOAT64); }
+"string"        { return token(sym.TIPO_STRING,  TipoToken.TIPO_STRING);  }
+"bool"          { return token(sym.TIPO_BOOL,    TipoToken.TIPO_BOOL);    }
+"rune"          { return token(sym.TIPO_RUNE,    TipoToken.TIPO_RUNE);    }
 
-/* ── Literales booleanos y nil ───────────────────────────────────── */
-"true"      { return token(sym.BOOLEANO, TipoToken.LIT_BOOLEANO); }
-"false"     { return token(sym.BOOLEANO, TipoToken.LIT_BOOLEANO); }
-"nil"       { return token(sym.NIL,      TipoToken.LIT_NIL);      }
+/* Literales */
+"true"          { return token(sym.BOOLEANO, TipoToken.LIT_BOOLEANO); }
+"false"         { return token(sym.BOOLEANO, TipoToken.LIT_BOOLEANO); }
+"nil"           { return token(sym.NIL,      TipoToken.LIT_NIL);      }
 
-/* ── Literales numéricos ─────────────────────────────────────────── */
-/* Flotante ANTES que entero para capturar "3.14" completo */
-{Flotante}  { return token(sym.FLOTANTE, TipoToken.LIT_FLOTANTE); }
-{Entero}    { return token(sym.ENTERO,   TipoToken.LIT_ENTERO);   }
+{Flotante}      { return token(sym.FLOTANTE, TipoToken.LIT_FLOTANTE); }
+{Entero}        { return token(sym.ENTERO,   TipoToken.LIT_ENTERO);   }
+{StringLit}     { return token(sym.STRING,   TipoToken.LIT_STRING);   }
+{RuneLit}       { return token(sym.RUNE_LIT, TipoToken.LIT_RUNE);     }
 
-/* ── Literales string y rune ─────────────────────────────────────── */
-{StringLit} { return token(sym.STRING,   TipoToken.LIT_STRING);   }
-{RuneLit}   { return token(sym.RUNE_LIT, TipoToken.LIT_RUNE);     }
-
-/* ── Identificadores ─────────────────────────────────────────────── */
+/* Identificadores */
 {Identificador} { return token(sym.ID, TipoToken.IDENTIFICADOR); }
 
-/* ── Operadores de dos caracteres (ANTES que operadores simples) ─── */
-":="        { return token(sym.ASIGN_CORTO,   TipoToken.OP_ASIGN_CORTO);   }
-"+="        { return token(sym.ASIGN_SUMA,    TipoToken.OP_ASIGN_SUMA);    }
-"-="        { return token(sym.ASIGN_RESTA,   TipoToken.OP_ASIGN_RESTA);   }
-"=="        { return token(sym.IGUAL,         TipoToken.OP_IGUAL);         }
-"!="        { return token(sym.DIFERENTE,     TipoToken.OP_DIFERENTE);     }
-"<="        { return token(sym.MENOR_IGUAL,   TipoToken.OP_MENOR_IGUAL);   }
-">="        { return token(sym.MAYOR_IGUAL,   TipoToken.OP_MAYOR_IGUAL);   }
-"&&"        { return token(sym.AND,           TipoToken.OP_AND);           }
-"||"        { return token(sym.OR,            TipoToken.OP_OR);            }
-"++"        { return token(sym.INCREMENTO,    TipoToken.OP_INCREMENTO);    }
-"--"        { return token(sym.DECREMENTO,    TipoToken.OP_DECREMENTO);    }
+/* Operadores y otros */
+":=" { return token(sym.ASIGN_CORTO, TipoToken.OP_ASIGN_CORTO); }
+"+=" { return token(sym.ASIGN_SUMA,  TipoToken.OP_ASIGN_SUMA);  }
+"-=" { return token(sym.ASIGN_RESTA, TipoToken.OP_ASIGN_RESTA); }
+"==" { return token(sym.IGUAL,       TipoToken.OP_IGUAL);       }
+"!=" { return token(sym.DIFERENTE,   TipoToken.OP_DIFERENTE);   }
+"<=" { return token(sym.MENOR_IGUAL, TipoToken.OP_MENOR_IGUAL); }
+">=" { return token(sym.MAYOR_IGUAL, TipoToken.OP_MAYOR_IGUAL); }
+"&&" { return token(sym.AND,         TipoToken.OP_AND);         }
+"||" { return token(sym.OR,          TipoToken.OP_OR);          }
+"++" { return token(sym.INCREMENTO,  TipoToken.OP_INCREMENTO);  }
+"--" { return token(sym.DECREMENTO,  TipoToken.OP_DECREMENTO);  }
 
-/* ── Operadores de un carácter ───────────────────────────────────── */
-"+"         { return token(sym.SUMA,          TipoToken.OP_SUMA);          }
-"-"         { return token(sym.RESTA,         TipoToken.OP_RESTA);         }
-"*"         { return token(sym.MULT,          TipoToken.OP_MULT);          }
-"/"         { return token(sym.DIV,           TipoToken.OP_DIV);           }
-"%"         { return token(sym.MOD,           TipoToken.OP_MOD);           }
-"="         { return token(sym.ASIGNACION,    TipoToken.OP_ASIGNACION);    }
-"<"         { return token(sym.MENOR,         TipoToken.OP_MENOR);         }
-">"         { return token(sym.MAYOR,         TipoToken.OP_MAYOR);         }
-"!"         { return token(sym.NOT,           TipoToken.OP_NOT);           }
+"+"  { return token(sym.SUMA,        TipoToken.OP_SUMA);        }
+"-"  { return token(sym.RESTA,       TipoToken.OP_RESTA);       }
+"*"  { return token(sym.MULT,        TipoToken.OP_MULT);        }
+"/"  { return token(sym.DIV,         TipoToken.OP_DIV);         }
+"%"  { return token(sym.MOD,         TipoToken.OP_MOD);         }
+"="  { return token(sym.ASIGNACION,  TipoToken.OP_ASIGNACION);  }
+"<"  { return token(sym.MENOR,       TipoToken.OP_MENOR);       }
+">"  { return token(sym.MAYOR,       TipoToken.OP_MAYOR);       }
+"!"  { return token(sym.NOT,         TipoToken.OP_NOT);         }
+"("  { return token(sym.PAREN_ABRE,  TipoToken.PAREN_ABRE);     }
+")"  { return token(sym.PAREN_CIERRA, TipoToken.PAREN_CIERRA);  }
+"{"  { return token(sym.LLAVE_ABRE,   TipoToken.LLAVE_ABRE);    }
+"}"  { return token(sym.LLAVE_CIERRA, TipoToken.LLAVE_CIERRA);  }
+";"  { return token(sym.PUNTO_COMA,   TipoToken.PUNTO_COMA);    }
+","  { return token(sym.COMA,         TipoToken.COMA);          }
+"."  { return token(sym.PUNTO,        TipoToken.PUNTO);         }
 
-/* ── Delimitadores ───────────────────────────────────────────────── */
-"("         { return token(sym.PAREN_ABRE,     TipoToken.PAREN_ABRE);     }
-")"         { return token(sym.PAREN_CIERRA,   TipoToken.PAREN_CIERRA);   }
-"{"         { return token(sym.LLAVE_ABRE,     TipoToken.LLAVE_ABRE);     }
-"}"         { return token(sym.LLAVE_CIERRA,   TipoToken.LLAVE_CIERRA);   }
-"["         { return token(sym.CORCHETE_ABRE,  TipoToken.CORCHETE_ABRE);  }
-"]"         { return token(sym.CORCHETE_CIERRA,TipoToken.CORCHETE_CIERRA);}
-";"         { return token(sym.PUNTO_COMA,     TipoToken.PUNTO_COMA);     }
-":"         { return token(sym.DOS_PUNTOS,     TipoToken.DOS_PUNTOS);     }
-","         { return token(sym.COMA,           TipoToken.COMA);           }
-"."         { return token(sym.PUNTO,          TipoToken.PUNTO);          }
+/* Fallback de error */
+[^] { errorLexico(yytext()); }
 
-/* ── Cualquier otro carácter → ERROR LÉXICO (no detiene el análisis) */
-[^]         {
-                errorLexico(yytext());
-            }
+/* Manejo explícito de EOF para inyectar un último ';' si es necesario y evitar cuelgues */
+<<EOF>> { 
+    if (requierePuntoComa) {
+        requierePuntoComa = false;
+        Token t = new Token(TipoToken.PUNTO_COMA, "ASI_EOF", yyline + 1, yycolumn + 1);
+        listaTokens.add(t);
+        return new Symbol(sym.PUNTO_COMA, yyline + 1, yycolumn + 1, t);
+    }
+    return new Symbol(sym.EOF); 
+}

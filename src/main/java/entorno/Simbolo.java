@@ -1,21 +1,18 @@
 package entorno;
 
-/**
- * Simbolo — Entrada en la tabla de símbolos del intérprete GoLite.
- *
- * El PDF exige el reporte de tabla de símbolos con:
- *   ID | Tipo símbolo | Tipo dato | Ámbito | Línea | Columna
- *
- * TipoSimbolo:
- *   VARIABLE  → declarada con var o :=
- *   FUNCION   → declarada con func
- *   PARAMETRO → parámetro formal de función
- */
+
+ 
+   // ID | Tipo símbolo | Tipo dato | Ámbito | Línea | Columna
+  //TipoSimbolo:
+   // VARIABLE   declarada con var o :=
+    //FUNCION    declarada con func
+  //PARAMETRO parámetro formal de función
+
 public class Simbolo {
 
     public enum TipoSimbolo { VARIABLE, FUNCION, PARAMETRO }
 
-    // ─── Campos del reporte del PDF ────────────────────────────────────────────
+    //  Campos del reporte 
     private final String      nombre;
     private final TipoSimbolo tipoSimbolo;
     private final String      tipoDato;    // "int", "float64", "string", "bool", "rune", nombre struct
@@ -23,7 +20,7 @@ public class Simbolo {
     private final int         linea;
     private final int         columna;
 
-    // ─── Valor en tiempo de ejecución ──────────────────────────────────────────
+    // Valor en tiempo de ejecución 
     private Object valor;
 
     public Simbolo(String nombre, TipoSimbolo tipoSimbolo, String tipoDato,
@@ -37,7 +34,7 @@ public class Simbolo {
         this.valor       = valor;
     }
 
-    // ─── Getters ───────────────────────────────────────────────────────────────
+    // Getters
     public String      getNombre()      { return nombre;      }
     public TipoSimbolo getTipoSimbolo() { return tipoSimbolo; }
     public String      getTipoDato()    { return tipoDato;    }
@@ -48,7 +45,7 @@ public class Simbolo {
 
     public void setValor(Object valor)  { this.valor = valor; }
 
-    // ─── Formato para el reporte ───────────────────────────────────────────────
+    //  Formato para el reporte
     public String toReportRow(int numero) {
         return String.format("| %-4d | %-20s | %-10s | %-12s | %-15s | %-6d | %-7d |",
                 numero,

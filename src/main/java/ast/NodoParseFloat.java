@@ -3,12 +3,11 @@ package ast;
 import entorno.Entorno;
 import errores.ErrorManager;
 
-/**
- * Función embebida: strconv.ParseFloat(cadena)
- */
-public class NodoParseFloat { // Implementa tu interfaz Expresion
+
+public class NodoParseFloat { 
     
-    private final Object expresion; // Debería ser de tipo Expresion o Nodo
+    
+    private final Object expresion; 
     private final int linea;
     private final int columna;
 
@@ -18,11 +17,10 @@ public class NodoParseFloat { // Implementa tu interfaz Expresion
         this.columna = columna;
     }
 
-    // Método resolver o evaluate (ajusta el nombre según tu interfaz)
+    // Método resolver o evaluate 
     public Object resolver(Entorno env) {
-        // Asumiendo que tu interfaz tiene un método resolver() o evaluate()
-        // Object valor = ((Expresion) expresion).resolver(env); 
-        Object valor = null; // Reemplazar por la evaluación real
+      
+        Object valor = null; 
 
         if (valor == null) return 0.0;
 
@@ -34,7 +32,7 @@ public class NodoParseFloat { // Implementa tu interfaz Expresion
                     "strconv.ParseFloat: La cadena '" + valor + "' no tiene un formato numérico válido.", 
                     linea, columna
                 );
-                return 0.0; // Valor seguro para evitar cascada de errores
+                return 0.0; 
             }
         } else {
             ErrorManager.getInstance().agregarSemantico(

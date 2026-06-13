@@ -3,13 +3,7 @@ package ast;
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 
-/**
- * NodoUnario — Operación con un solo operando.
- *
- * Operadores según el PDF:
- *   -expr  → negación aritmética (int → int, float64 → float64)
- *   !expr  → negación lógica    (bool → bool)
- */
+
 public class NodoUnario extends NodoExpresion {
 
     private final String        operador;

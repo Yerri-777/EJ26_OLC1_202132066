@@ -4,18 +4,7 @@ import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 import java.util.List;
 
-/**
- * NodoReflectTypeOf — reflect.TypeOf(expr)
- *
- * Devuelve el tipo de un valor en tiempo de ejecución como String.
- * Según el PDF:
- *   reflect.TypeOf(42)       → "int"
- *   reflect.TypeOf(3.14)     → "float64"
- *   reflect.TypeOf("hola")   → "string"
- *   reflect.TypeOf(true)     → "bool"
- *   reflect.TypeOf([]int{})  → "[]int"   (Fase 2)
- *   reflect.TypeOf(persona)  → "Persona" (Fase 2)
- */
+
 public class NodoReflectTypeOf extends NodoExpresion {
 
     private final NodoExpresion argumento;

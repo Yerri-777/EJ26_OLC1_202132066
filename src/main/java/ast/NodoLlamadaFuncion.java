@@ -5,12 +5,7 @@ import excepciones.ErrorSemanticoException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * NodoLlamadaFuncion — Invocación de función user-defined.
- *
- * Evalúa cada argumento, busca la función en el entorno global
- * y la ejecuta con los valores calculados.
- */
+
 public class NodoLlamadaFuncion extends NodoExpresion {
 
     private final String              nombre;

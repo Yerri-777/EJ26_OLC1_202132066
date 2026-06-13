@@ -3,11 +3,7 @@ package ast;
 import entorno.Entorno;
 import errores.ErrorManager;
 
-/**
- * NodoIdentificador — Lectura del valor de una variable.
- * Blindado: Si no encuentra la variable, reporta el error y retorna null 
- * para no detener el compilador.
- */
+
 public class NodoIdentificador extends NodoExpresion {
 
     private final String nombre;
@@ -28,7 +24,7 @@ public class NodoIdentificador extends NodoExpresion {
                 "La variable '" + nombre + "' no está declarada en este ámbito.",
                 linea, columna
             );
-            return null; // Retorno seguro, los nodos padre lo manejarán
+            return null; 
         }
         
         return val;

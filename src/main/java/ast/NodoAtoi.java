@@ -6,7 +6,7 @@ import errores.ErrorManager;
 /**
  * Función embebida: strconv.Atoi(cadena)
  */
-public class NodoAtoi { // Implementa tu interfaz Expresion
+public class NodoAtoi { 
     
     private final Object expresion;
     private final int linea;
@@ -19,8 +19,8 @@ public class NodoAtoi { // Implementa tu interfaz Expresion
     }
 
     public Object resolver(Entorno env) {
-        // Object valor = ((Expresion) expresion).resolver(env);
-        Object valor = null; // Reemplazar por la evaluación real
+    
+        Object valor = null; 
 
         if (valor == null) return 0;
 

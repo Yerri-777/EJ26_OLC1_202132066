@@ -3,16 +3,13 @@ package entorno;
 import ast.NodoPrograma;
 import gui.Reportable;
 
-/**
- * ReporteAST — Genera la representación visual del AST.
- *
- * El PDF exige:
- *   "El AST deberá incluir todas las estructuras sintácticas del programa,
- *    como declaraciones de variables, funciones, sentencias de control,
- *    expresiones y cualquier otro elemento del lenguaje."
- *
- * Formato: árbol indentado con colores en HTML.
- */
+
+ // ReporteAST — Genera la representación visual del AST.
+ 
+  // "El AST deberá incluir todas las estructuras sintácticas del programa,
+    // como declaraciones de variables, funciones, sentencias de control,
+  //   expresiones y cualquier otro elemento del lenguaje."
+ 
 public class ReporteAST implements Reportable {
 
     private NodoPrograma raiz;
@@ -60,9 +57,9 @@ public class ReporteAST implements Reportable {
         return sb.toString();
     }
 
-    /**
-     * Aplica color a palabras clave del AST para mejor legibilidad.
-     */
+    
+     // Aplica color a palabras clave del AST para mejor legibilidad.
+    
     private String colorearAST(String texto) {
         // Nodos de función
         texto = texto.replaceAll("(Funcion:.*)", "<span class='nodo-func'>$1</span>");

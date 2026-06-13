@@ -4,10 +4,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Gestor central de errores del compilador GoLite.
- * Blindado: Thread-safe y con listas inmutables para reportes.
- */
+
+ //Gestor central de errores del compilador GoLite.
+
 public class ErrorManager {
 
     private static ErrorManager instancia;
@@ -24,7 +23,7 @@ public class ErrorManager {
         return instancia;
     }
 
-    // ─── API pública de Inyección ─────────────────────────────────────────────
+    // API pública de Inyección
     public synchronized void reset() {
         this.errores.clear();
     }
@@ -41,7 +40,7 @@ public class ErrorManager {
         errores.add(new Error(TipoError.SEMANTICO, asegurarString(descripcion), linea, columna));
     }
 
-    // ─── Consultas de Estado ──────────────────────────────────────────────────
+    //  Consultas de Estado 
     public synchronized List<Error> getErrores() {
         return Collections.unmodifiableList(new ArrayList<>(errores));
     }
@@ -62,15 +61,12 @@ public class ErrorManager {
         return errores.stream().anyMatch(e -> e.getTipo() == TipoError.SINTACTICO);
     }
 
-    /**
-     * Verifica si existen errores de tipo SEMANTICO en la lista actual.
-     * Requerido por Compiler para el control post-ejecución.
-     */
+  
     public synchronized boolean hayErroresSemanticos() {
         return errores.stream().anyMatch(e -> e.getTipo() == TipoError.SEMANTICO);
     }
 
-    // ─── Reporte en Texto Plano (Requerido por Compiler) ──────────────────────
+    // reporte en Texto Plano ─
     public synchronized String generarReporte() {
         if (errores.isEmpty()) {
             return "✓ No se encontraron errores durante la compilación.";
@@ -95,7 +91,7 @@ public class ErrorManager {
         return sb.toString();
     }
 
-    // ─── Reporte HTML ─────────────────────────────────────────────────────────
+    // reporte HTML 
     public synchronized String generarReporteHTML() {
         StringBuilder sb = new StringBuilder();
         sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'>");

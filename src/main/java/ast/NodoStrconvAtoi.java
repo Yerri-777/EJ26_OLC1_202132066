@@ -3,13 +3,7 @@ package ast;
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 
-/**
- * NodoStrconvAtoi — strconv.Atoi(expr)
- *
- * Convierte string → int.
- * Si la cadena no es un entero válido → error semántico.
- * No redondea decimales (PDF: "123.45" genera error).
- */
+
 public class NodoStrconvAtoi extends NodoExpresion {
 
     private final NodoExpresion argumento;

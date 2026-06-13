@@ -1,10 +1,6 @@
 package ast;
 
-/**
- * NodoParametro — Representa un parámetro formal en la declaración de una función.
- * Ejemplo: func suma(a int, b int)
- * * Incluye soporte para renderizado recursivo en el reporte jerárquico del AST.
- */
+
 public class NodoParametro {
     
     private final String nombre;
@@ -19,7 +15,7 @@ public class NodoParametro {
         this.columna = columna;
     }
 
-    // ─── Getters ─────────────────────────────────────────────────────────────
+    //  Getters 
     public String getNombre() {
         return nombre;
     }
@@ -40,7 +36,7 @@ public class NodoParametro {
         return columna;
     }
 
-    // ─── Generación de fila para la Tabla de Símbolos ────────────────────────
+    //Generación de fila para la Tabla de Símbolos 
     public entorno.Simbolo toSimbolo(String ambitoFuncion) {
         return new entorno.Simbolo(
             this.nombre,
@@ -53,11 +49,8 @@ public class NodoParametro {
         );
     }
 
-    // ─── Representación en el Árbol AST (Requerido por NodoFuncion) ──────────
-    /**
-     * Devuelve la representación del parámetro indentada según su nivel.
-     * Salida esperada: "Parametro: a (int)\n"
-     */
+    // Representación en el Árbol AST (Requerido por NodoFuncion)
+ 
     public String toAST(int nivel) {
         StringBuilder sb = new StringBuilder();
         sb.append(indent(nivel))
@@ -69,18 +62,17 @@ public class NodoParametro {
         return sb.toString();
     }
 
-    /**
-     * Genera espacios de indentación simulando la jerarquía del árbol.
-     */
+  
     private String indent(int nivel) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < nivel; i++) {
-            sb.append("  "); // Dos espacios por nivel de profundidad
+            sb.append("  "); 
+// Dos espacios por nivel de profundidad
         }
         return sb.toString();
     }
 
-    // ─── Clase Envolvente Interna para Compatibilidad de Tipos ────────────────
+    //Clase Envolvente Interna para Compatibilidad de Tipos 
     public static class TipoWrapper {
         private final String nombreTipo;
 

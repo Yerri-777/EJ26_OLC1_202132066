@@ -2,13 +2,7 @@ package ast;
 
 import entorno.Entorno;
 
-/**
- * NodoTipo — Representa un tipo de dato en el AST.
- *
- * Usado en declaraciones de variables y parámetros de funciones.
- * El nombre puede ser: "int", "float64", "string", "bool", "rune",
- * o el nombre de un struct (Fase 2).
- */
+
 public class NodoTipo extends Nodo {
 
     private final String nombre;
@@ -28,7 +22,8 @@ public class NodoTipo extends Nodo {
             case "string":  return "";
             case "bool":    return false;
             case "rune":    return 0;
-            default:        return null;  // nil para tipos compuestos
+            default:        return null;  
+// nil para tipos compuestos
         }
     }
 

@@ -8,68 +8,60 @@ package parser;
 /** CUP generated interface containing symbol constants. */
 public interface sym {
   /* terminals */
-  public static final int MULT = 33;
-  public static final int REFLECT_TYPEOF = 29;
+  public static final int MULT = 29;
+  public static final int REFLECT_TYPEOF = 25;
   public static final int TIPO_RUNE = 12;
-  public static final int UMINUS = 51;
+  public static final int UMINUS = 47;
   public static final int ENTERO = 2;
-  public static final int STRCONV_ATOI = 27;
-  public static final int DIFERENTE = 41;
-  public static final int CASE = 19;
-  public static final int RESTA = 32;
-  public static final int DOS_PUNTOS = 59;
-  public static final int CONTINUE = 22;
+  public static final int STRCONV_ATOI = 23;
+  public static final int DIFERENTE = 37;
+  public static final int RESTA = 28;
+  public static final int CONTINUE = 19;
   public static final int TIPO_STRING = 10;
-  public static final int PAREN_CIERRA = 53;
+  public static final int PAREN_CIERRA = 49;
   public static final int FOR = 17;
-  public static final int NOT = 48;
-  public static final int AND = 46;
-  public static final int IGUAL = 40;
-  public static final int RANGE = 24;
+  public static final int NOT = 44;
+  public static final int AND = 42;
+  public static final int IGUAL = 36;
   public static final int NIL = 7;
-  public static final int OR = 47;
-  public static final int CORCHETE_CIERRA = 57;
-  public static final int DIV = 34;
-  public static final int INCREMENTO = 49;
-  public static final int ASIGN_SUMA = 38;
+  public static final int OR = 43;
+  public static final int DIV = 30;
+  public static final int INCREMENTO = 45;
   public static final int TIPO_FLOAT64 = 9;
-  public static final int SUMA = 31;
+  public static final int ASIGN_SUMA = 34;
+  public static final int SUMA = 27;
   public static final int IF = 15;
-  public static final int PUNTO_COMA = 58;
-  public static final int ID = 30;
+  public static final int PUNTO_COMA = 52;
+  public static final int ID = 26;
   public static final int RUNE_LIT = 5;
   public static final int EOF = 0;
-  public static final int RETURN = 23;
-  public static final int DECREMENTO = 50;
+  public static final int RETURN = 20;
+  public static final int DECREMENTO = 46;
   public static final int error = 1;
-  public static final int COMA = 60;
-  public static final int MENOR = 42;
-  public static final int MOD = 35;
-  public static final int BREAK = 21;
-  public static final int LLAVE_ABRE = 54;
+  public static final int COMA = 53;
+  public static final int MENOR = 38;
+  public static final int MOD = 31;
+  public static final int BREAK = 18;
+  public static final int LLAVE_ABRE = 50;
   public static final int TIPO_INT = 8;
-  public static final int ASIGNACION = 36;
-  public static final int SWITCH = 18;
-  public static final int MAYOR = 43;
-  public static final int ASIGN_RESTA = 39;
-  public static final int CORCHETE_ABRE = 56;
-  public static final int PAREN_ABRE = 52;
+  public static final int ASIGNACION = 32;
+  public static final int MAYOR = 39;
+  public static final int ASIGN_RESTA = 35;
+  public static final int PAREN_ABRE = 48;
   public static final int ELSE = 16;
-  public static final int PUNTO = 61;
+  public static final int PUNTO = 21;
   public static final int FUNC = 14;
-  public static final int MAYOR_IGUAL = 45;
-  public static final int DEFAULT = 20;
-  public static final int STRCONV_PARSEFLOAT = 28;
+  public static final int MAYOR_IGUAL = 41;
+  public static final int STRCONV_PARSEFLOAT = 24;
   public static final int TIPO_BOOL = 11;
-  public static final int ASIGN_CORTO = 37;
+  public static final int ASIGN_CORTO = 33;
   public static final int BOOLEANO = 6;
   public static final int STRING = 4;
-  public static final int LLAVE_CIERRA = 55;
-  public static final int MENOR_IGUAL = 44;
-  public static final int STRUCT = 25;
+  public static final int LLAVE_CIERRA = 51;
+  public static final int MENOR_IGUAL = 40;
   public static final int VAR = 13;
   public static final int FLOTANTE = 3;
-  public static final int FMT_PRINTLN = 26;
+  public static final int FMT_PRINTLN = 22;
   public static final String[] terminalNames = new String[] {
   "EOF",
   "error",
@@ -89,14 +81,10 @@ public interface sym {
   "IF",
   "ELSE",
   "FOR",
-  "SWITCH",
-  "CASE",
-  "DEFAULT",
   "BREAK",
   "CONTINUE",
   "RETURN",
-  "RANGE",
-  "STRUCT",
+  "PUNTO",
   "FMT_PRINTLN",
   "STRCONV_ATOI",
   "STRCONV_PARSEFLOAT",
@@ -127,12 +115,8 @@ public interface sym {
   "PAREN_CIERRA",
   "LLAVE_ABRE",
   "LLAVE_CIERRA",
-  "CORCHETE_ABRE",
-  "CORCHETE_CIERRA",
   "PUNTO_COMA",
-  "DOS_PUNTOS",
-  "COMA",
-  "PUNTO"
+  "COMA"
   };
 }
 

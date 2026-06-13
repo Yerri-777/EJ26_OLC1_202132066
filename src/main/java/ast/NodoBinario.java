@@ -12,12 +12,12 @@ import excepciones.ErrorSemanticoException;
  *   Comparación : ==  !=  <  >  <=  >=
  *   Lógicos     : &&  ||
  *
- * Tabla de conversión implícita (PDF sección Operadores Aritméticos):
- *   int op int         → int
- *   int op float64     → float64
- *   float64 op int     → float64
- *   float64 op float64 → float64
- *   string + string    → string   (solo para +)
+ *Operadores Aritméticos):
+ *   int op int          int
+ *   int op float64      float64
+ *   float64 op int      float64
+ *   float64 op float64  float64
+ *   string + string     string   (solo para +)
  */
 public class NodoBinario extends NodoExpresion {
 
@@ -69,7 +69,7 @@ public class NodoBinario extends NodoExpresion {
         }
     }
 
-    // ─── Suma ──────────────────────────────────────────────────────────────────
+    //Suma 
     private Object opSuma(Object izq, Object der) {
         // string + string → concatenación
         if (izq instanceof String && der instanceof String) {
@@ -86,25 +86,25 @@ public class NodoBinario extends NodoExpresion {
         throw errorTipos("+", izq, der);
     }
 
-    // ─── Resta ─────────────────────────────────────────────────────────────────
+    //  Resta 
     private Object opResta(Object izq, Object der) {
         if (isInt(izq) && isInt(der))           return toInt(izq) - toInt(der);
         if (isNumerico(izq) && isNumerico(der)) return toDouble(izq) - toDouble(der);
         throw errorTipos("-", izq, der);
     }
 
-    // ─── Multiplicación ────────────────────────────────────────────────────────
+    // Multiplicación 
     private Object opMult(Object izq, Object der) {
         if (isInt(izq) && isInt(der))           return toInt(izq) * toInt(der);
         if (isNumerico(izq) && isNumerico(der)) return toDouble(izq) * toDouble(der);
         throw errorTipos("*", izq, der);
     }
 
-    // ─── División ──────────────────────────────────────────────────────────────
+    // División
     private Object opDiv(Object izq, Object der) {
         if (!isNumerico(izq) || !isNumerico(der)) throw errorTipos("/", izq, der);
 
-        // Verificar división por cero (PDF: "Se debe verificar que no haya división por 0")
+        // Verificar división por cero
         if (toDouble(der) == 0.0) {
             throw new ErrorSemanticoException(
                 "No se puede dividir entre cero.", linea, columna
@@ -115,9 +115,9 @@ public class NodoBinario extends NodoExpresion {
         return toDouble(izq) / toDouble(der);
     }
 
-    // ─── Módulo ────────────────────────────────────────────────────────────────
+    // Módulo
     private Object opMod(Object izq, Object der) {
-        // PDF: "El módulo produce el residuo entre la división entre tipos numéricos de tipo int"
+        
         if (!isInt(izq) || !isInt(der)) {
             throw new ErrorSemanticoException(
                 "Operación '%' solo es válida entre int e int. " +
@@ -133,17 +133,17 @@ public class NodoBinario extends NodoExpresion {
         return toInt(izq) % toInt(der);
     }
 
-    // ─── Igualdad / Desigualdad ────────────────────────────────────────────────
+    // Igualdad / Desigualdad 
     private Object opIgualdad(Object izq, Object der, boolean esIgual) {
         boolean resultado;
 
-        // Numéricos: comparar como double para int==float64 (PDF lo permite)
+        // Numéricos: comparar como double para int==float64 
         if (isNumerico(izq) && isNumerico(der)) {
             resultado = toDouble(izq) == toDouble(der);
         } else if (izq instanceof Boolean && der instanceof Boolean) {
             resultado = izq.equals(der);
         } else if (izq instanceof String && der instanceof String) {
-            // PDF: "Las comparaciones entre cadenas se hacen lexicográficamente"
+            // Las comparaciones entre cadenas se hacen lexicográficamente
             resultado = izq.equals(der);
         } else {
             throw new ErrorSemanticoException(
@@ -155,9 +155,9 @@ public class NodoBinario extends NodoExpresion {
         return esIgual ? resultado : !resultado;
     }
 
-    // ─── Relacionales ──────────────────────────────────────────────────────────
+    // Relacionales 
     private Object opRelacional(Object izq, Object der, String op) {
-        // Numéricos (int, float64, rune)
+        // Numéricos (int float64 rune)
         if (isNumerico(izq) && isNumerico(der)) {
             double i = toDouble(izq), d = toDouble(der);
             switch (op) {
@@ -167,7 +167,7 @@ public class NodoBinario extends NodoExpresion {
                 case ">=": return i >= d;
             }
         }
-        // String: comparación lexicográfica
+        // String comparación lexicográfica
         if (izq instanceof String && der instanceof String) {
             int cmp = ((String) izq).compareTo((String) der);
             switch (op) {
@@ -180,7 +180,7 @@ public class NodoBinario extends NodoExpresion {
         throw errorTipos(op, izq, der);
     }
 
-    // ─── Lógicos ───────────────────────────────────────────────────────────────
+    // Lógicos 
     private Object opAnd(Object izq, Object der) {
         if (!(izq instanceof Boolean) || !(der instanceof Boolean)) {
             throw new ErrorSemanticoException(
@@ -203,9 +203,9 @@ public class NodoBinario extends NodoExpresion {
         return (Boolean) izq || (Boolean) der;
     }
 
-    // ─── Utilidades de tipos ───────────────────────────────────────────────────
+    // Utilidades de tipos 
 
-    /** int y rune son ambos Integer en Java, tratarlos igual */
+    /**int y rune son ambos Integer en Java */
     private boolean isInt(Object v)      { return v instanceof Integer; }
     private boolean isNumerico(Object v) { return v instanceof Integer || v instanceof Double; }
 

@@ -2,19 +2,7 @@ package ast;
 
 import entorno.Entorno;
 
-/**
- * NodoLiteral — Valor constante en el código fuente.
- *
- * Tipos soportados según el PDF:
- *   int     → Integer (Java)
- *   float64 → Double  (Java)
- *   string  → String  (Java)
- *   bool    → Boolean (Java)
- *   rune    → Integer (Java) — valor ASCII del carácter
- *   nil     → null
- *
- * El literal 0 puede ser int o float64 según contexto (PDF lo indica).
- */
+
 public class NodoLiteral extends NodoExpresion {
 
     private final Object valor;
