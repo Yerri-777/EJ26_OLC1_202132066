@@ -2,32 +2,36 @@ package ast;
 
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
+import excepciones.ReturnException;
 import java.util.ArrayList;
 import java.util.List;
 
-
 public class NodoLlamadaFuncion extends NodoExpresion {
 
-    private final String              nombre;
+    private final String nombre;
     private final List<NodoExpresion> argumentos;
 
     public NodoLlamadaFuncion(String nombre,
-                               List<NodoExpresion> argumentos,
-                               int linea, int columna) {
+                              List<NodoExpresion> argumentos,
+                              int linea, int columna) {
         super(linea, columna);
-        this.nombre     = nombre;
+        this.nombre = nombre;
         this.argumentos = argumentos;
     }
 
-    public String getNombre() { return nombre; }
+    public String getNombre() {
+        return nombre;
+    }
 
     @Override
     public Object getValue(Entorno entorno) {
         NodoFuncion fn = entorno.buscarFuncion(nombre);
+
         if (fn == null) {
             throw new ErrorSemanticoException(
                 "La función '" + nombre + "' no está declarada.",
-                linea, columna
+                linea,
+                columna
             );
         }
 
@@ -37,16 +41,25 @@ public class NodoLlamadaFuncion extends NodoExpresion {
             valores.add(arg.getValue(entorno));
         }
 
-        return fn.ejecutarCon(entorno, valores);
+        try {
+            return fn.ejecutarCon(entorno, valores);
+        } catch (ReturnException e) {
+            // Recupera el valor propagado por un nodo return
+            return e.getValor();
+        }
     }
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("LlamadaFuncion: ").append(nombre).append("\n");
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("LlamadaFuncion\n");
+    sb.append(indent(nivel + 1)).append("Funcion: ").append(nombre).append("\n");
+    if (argumentos != null) {
         for (NodoExpresion a : argumentos) {
-            sb.append(a.toAST(nivel + 1));
+            if (a != null) {
+                sb.append(a.toAST(nivel + 1));
+            }
         }
-        return sb.toString();
     }
-}
+    return sb.toString();
+} }

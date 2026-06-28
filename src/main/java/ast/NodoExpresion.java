@@ -16,4 +16,9 @@ public abstract class NodoExpresion extends Nodo {
     public Object execute(Entorno entorno) {
         return getValue(entorno);
     }
+
+    @Override
+public String toAST(int nivel) {
+    return indent(nivel) + "EvaluacionExpresion\n";
+}
 }

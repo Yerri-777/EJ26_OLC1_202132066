@@ -27,17 +27,16 @@ public class NodoBloque extends NodoSentencia {
         return null;
     }
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("Bloque\n");
-        if (sentencias != null) {
-            for (Nodo n : sentencias) {
-                if (n != null) {
-                    sb.append(n.toAST(nivel + 1));
-                }
+@Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("Bloque\n");
+    if (sentencias != null) {
+        for (Nodo n : sentencias) {
+            if (n != null) {
+                sb.append(n.toAST(nivel + 1));
             }
         }
-        return sb.toString();
     }
-}
+    return sb.toString();
+} }

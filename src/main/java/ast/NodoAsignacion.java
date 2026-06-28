@@ -1,85 +1,67 @@
 package ast;
 
 import entorno.Entorno;
-import errores.ErrorManager;
+import entorno.Simbolo; // Asegúrate de importar tu clase Simbolo
+import excepciones.ErrorSemanticoException; // Asegúrate de importar tu clase de error
 
-/**
- * NodoAsignacion — id = expr
- * Permite conversión implícita int → float64.
- */
 public class NodoAsignacion extends NodoSentencia {
 
-    private final String        nombre;
+    private final Nodo target;
     private final NodoExpresion expresion;
 
-    public NodoAsignacion(String nombre, NodoExpresion expresion, int linea, int columna) {
+    public NodoAsignacion(Nodo target, NodoExpresion expresion, int linea, int columna) {
         super(linea, columna);
-        this.nombre    = nombre;
+        this.target = target;
         this.expresion = expresion;
     }
 
-    // Getters 
-    
-    public String getNombre() {
-        return nombre;
-    }
-
-    public NodoExpresion getExpresion() {
-        return expresion;
-    }
-
-    // Ejecución 
-
     @Override
-    public Object execute(Entorno entorno) {
-        // Verificar que la variable exista
-        if (entorno.obtener(nombre) == Entorno.NO_ENCONTRADO) {
-            ErrorManager.getInstance().agregarSemantico(
-                "La variable '" + nombre + "' no está declarada en este ámbito.",
-                linea, columna
-            );
-             // Fallback seguro, abortar asignación
-            return null;
-        }
-
+    public Object execute(Entorno entorno) throws ErrorSemanticoException {
+        // 1. Obtenemos el valor de la expresión
         Object nuevoValor = expresion.getValue(entorno);
-        
-        // Si la expresión falló 
-        if (nuevoValor == null) return null;
 
-        String tipoActual = entorno.obtenerTipo(nombre);
-        String tipoNuevo  = inferirTipo(nuevoValor);
+        if (nuevoValor != null) {
+            // 2. VALIDACIÓN SEMÁNTICA: Solo si es un identificador, validamos el tipo
+            if (target instanceof NodoIdentificador) {
+                String nombreVar = ((NodoIdentificador) target).getNombre();
+                Simbolo simbolo = entorno.buscar(nombreVar);
 
-        // Conversión implícita int float64
-        if ("float64".equals(tipoActual) && "int".equals(tipoNuevo)) {
-            nuevoValor = ((Integer) nuevoValor).doubleValue();
-            tipoNuevo  = "float64";
+                if (simbolo != null) {
+                    String tipoDeclarado = simbolo.getTipoDato(); // <--- Usa el método que ya existe en tu clase Simbolo
+                    
+                    // Verificamos compatibilidad
+                    if (!esTipoCompatible(tipoDeclarado, nuevoValor)) {
+                        throw new ErrorSemanticoException(
+                            "Error semántico: No se puede asignar '" + nuevoValor.getClass().getSimpleName() + 
+                            "' a una variable declarada como '" + tipoDeclarado + "'", 
+                            this.linea, this.columna
+                        );
+                    }
+                }
+            }
+
+            // 3. Si pasó la validación, procedemos con la lógica original
+            target.assign(entorno, nuevoValor);
         }
-
-        if (!tipoActual.equals(tipoNuevo)) {
-            ErrorManager.getInstance().agregarSemantico(
-                "No se puede asignar un valor de tipo '" + tipoNuevo +
-                "' a la variable '" + nombre + "' de tipo '" + tipoActual + "'.",
-                linea, columna
-            );
-            return null; // Fallback seguro, abortar asignación
-        }
-
-        entorno.asignar(nombre, nuevoValor);
         return null;
     }
 
-    private String inferirTipo(Object v) {
-        if (v instanceof Integer) return "int";
-        if (v instanceof Double)  return "float64";
-        if (v instanceof String)  return "string";
-        if (v instanceof Boolean) return "bool";
-        return "nil";
+    // Método auxiliar para verificar compatibilidad de tipos
+    private boolean esTipoCompatible(String tipoDeclarado, Object valor) {
+        if (tipoDeclarado.equalsIgnoreCase("int")) return valor instanceof Integer;
+        if (tipoDeclarado.equalsIgnoreCase("string")) return valor instanceof String;
+        if (tipoDeclarado.equalsIgnoreCase("float")) return valor instanceof Double || valor instanceof Float;
+        if (tipoDeclarado.equalsIgnoreCase("bool")) return valor instanceof Boolean;
+        return true; // Por defecto dejamos pasar si no logramos determinar el tipo
     }
 
-    @Override
-    public String toAST(int nivel) {
-        return indent(nivel) + "Asignacion: " + nombre + "\n" +
-               expresion.toAST(nivel + 1);
-    }
-}
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("Asignacion\n");
+    // Agregamos el símbolo del operador de asignación
+    sb.append(indent(nivel + 1)).append("Operador: =\n");
+    if (target != null) sb.append(target.toAST(nivel + 1));
+    if (expresion != null) sb.append(expresion.toAST(nivel + 1));
+    return sb.toString();
+}}

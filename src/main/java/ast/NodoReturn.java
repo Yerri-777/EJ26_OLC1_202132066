@@ -28,20 +28,18 @@ public class NodoReturn extends Nodo {
         throw new ReturnException(valorRetorno); 
     }
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("NodoReturn\n");
-        
-        //  Imprimir la estructura del hijo 
-        if (this.expresion != null && this.expresion instanceof Nodo) {
-            sb.append(((Nodo) this.expresion).toAST(nivel + 1));
-        } else if (this.expresion != null) {
-            sb.append(indent(nivel + 1)).append("Expresion: ").append(this.expresion.toString()).append("\n");
-        } else {
-            sb.append(indent(nivel + 1)).append("Expresion: void\n");
-        }
-        
-        return sb.toString();
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("Return\n");
+    
+    if (this.expresion != null && this.expresion instanceof Nodo) {
+        sb.append(((Nodo) this.expresion).toAST(nivel + 1));
+    } else if (this.expresion != null) {
+        sb.append(indent(nivel + 1)).append("Valor: ").append(this.expresion.toString()).append("\n");
+    } else {
+        sb.append(indent(nivel + 1)).append("Valor: void\n");
     }
-}
+    
+    return sb.toString();
+} }

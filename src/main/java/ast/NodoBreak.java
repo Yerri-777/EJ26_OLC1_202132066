@@ -15,8 +15,7 @@ public class NodoBreak extends NodoSentencia {
         throw new BreakException(linea, columna);
     }
 
-    @Override
-    public String toAST(int nivel) {
-        return indent(nivel) + "Break\n";
-    }
-}
+@Override
+public String toAST(int nivel) {
+    return indent(nivel) + "Break\n";
+}}

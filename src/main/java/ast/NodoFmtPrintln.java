@@ -62,13 +62,17 @@ public class NodoFmtPrintln extends NodoExpresion {
         return s;
     }
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("FmtPrintln\n");
+@Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("FmtPrintln\n");
+    if (argumentos != null) {
         for (NodoExpresion a : argumentos) {
-            sb.append(a.toAST(nivel + 1));
+            if (a != null) {
+                sb.append(a.toAST(nivel + 1));
+            }
         }
-        return sb.toString();
     }
+    return sb.toString();
+}
 }

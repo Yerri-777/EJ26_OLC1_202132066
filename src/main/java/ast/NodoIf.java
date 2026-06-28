@@ -36,14 +36,14 @@ public class NodoIf extends NodoSentencia {
         return null;
     }
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("If\n");
-        sb.append(condicion.toAST(nivel + 1));
-        sb.append(bloqueIf.toAST(nivel + 1));
-        if (elseIf != null) sb.append(elseIf.toAST(nivel + 1));
-        if (bloqueElse != null) sb.append(bloqueElse.toAST(nivel + 1));
-        return sb.toString();
-    }
+ @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("If\n");
+    if (condicion != null)  sb.append(condicion.toAST(nivel + 1));
+    if (bloqueIf != null)   sb.append(bloqueIf.toAST(nivel + 1));
+    if (elseIf != null)     sb.append(elseIf.toAST(nivel + 1));
+    if (bloqueElse != null) sb.append(bloqueElse.toAST(nivel + 1));
+    return sb.toString();
+}
 }

@@ -60,7 +60,12 @@ public class NodoUnario extends NodoExpresion {
 
     @Override
     public String toAST(int nivel) {
-        return indent(nivel) + "Unario: " + operador + "\n" +
-               operando.toAST(nivel + 1);
+        StringBuilder sb = new StringBuilder();
+        sb.append(indent(nivel)).append("ExpresionUnaria\n");
+        sb.append(indent(nivel + 1)).append("Operador: ").append(operador).append("\n");
+        if (operando != null) {
+            sb.append(operando.toAST(nivel + 1));
+        }
+        return sb.toString();
     }
 }

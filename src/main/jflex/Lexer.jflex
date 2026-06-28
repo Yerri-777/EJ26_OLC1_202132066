@@ -20,8 +20,6 @@ import parser.sym;
 
 %{
     private List<Token> listaTokens = new ArrayList<>();
-    
-    
     private boolean requierePuntoComa = false;
 
     private Symbol token(int tipo, TipoToken tipoToken) {
@@ -29,12 +27,16 @@ import parser.sym;
         listaTokens.add(t);
         
         // Lógica ASI: Evaluamos si este token marca el posible final de una instrucción
+        // Se inyecta punto y coma si el token es un ID, un literal o un cierre de bloque/función
         if (tipo == sym.ID || tipo == sym.ENTERO || tipo == sym.FLOTANTE ||
             tipo == sym.STRING || tipo == sym.RUNE_LIT || tipo == sym.BOOLEANO ||
             tipo == sym.NIL || tipo == sym.BREAK || tipo == sym.CONTINUE ||
             tipo == sym.RETURN || tipo == sym.INCREMENTO || tipo == sym.DECREMENTO ||
             tipo == sym.PAREN_CIERRA || tipo == sym.LLAVE_CIERRA) {
             requierePuntoComa = true;
+        } else if (tipo == sym.PUNTO_COMA || tipo == sym.LLAVE_ABRE || tipo == sym.COMA) {
+            // Si el token es explícito, no inyectamos otro
+            requierePuntoComa = false;
         } else {
             requierePuntoComa = false;
         }
@@ -43,6 +45,7 @@ import parser.sym;
     }
 
     private void errorLexico(String lexema) {
+        // En lugar de detener, reportamos y continuamos
         ErrorManager.getInstance().agregarLexico(
             "El símbolo \"" + lexema + "\" no es reconocido.",
             yyline + 1, yycolumn + 1
@@ -53,10 +56,8 @@ import parser.sym;
 %}
 
 /* MACROS */
-/* Separamos los saltos de línea de los espacios normales para el ASI */
 SaltoLinea     = \r|\n|\r\n
 Espacio        = [ \t\f]+
-
 Digito         = [0-9]
 Letra          = [a-zA-Z_]
 Identificador  = {Letra}({Letra}|{Digito})*
@@ -71,30 +72,35 @@ ComBloque      = "/*"([^*]|\*+[^/*])*\*+"/"
 
 /* REGLAS */
 
-/* INYECCIÓN AUTOMÁTICA DE PUNTO Y COMA */
 {SaltoLinea} {
     if (requierePuntoComa) {
-        requierePuntoComa = false; // Apagamos bandera para evitar ciclos
-        // Creamos un token ficticio para enviarlo al parser
-        Token t = new Token(TipoToken.PUNTO_COMA, "ASI_;", yyline, yycolumn + 1);
+        requierePuntoComa = false; 
+        Token t = new Token(TipoToken.PUNTO_COMA, "ASI_;", yyline + 1, yycolumn + 1);
         listaTokens.add(t);
         return new Symbol(sym.PUNTO_COMA, yyline + 1, yycolumn + 1, t);
     }
 }
 
 {Espacio}       { /* ignorar */ }
-{ComLinea}      { /* ignorar, la bandera ASI no se altera aquí */ }
+{ComLinea}      { /* ignorar */ }
 {ComBloque}     { /* ignorar */ }
 
-/* Palabras reservadas */
+/* Reservadas Fase 1 y 2 */
+"package"       { return token(sym.TK_PACKAGE, TipoToken.RES_PACKAGE); }
 "var"           { return token(sym.VAR,      TipoToken.RES_VAR);      }
 "func"          { return token(sym.FUNC,     TipoToken.RES_FUNC);     }
 "if"            { return token(sym.IF,       TipoToken.RES_IF);       }
 "else"          { return token(sym.ELSE,     TipoToken.RES_ELSE);     }
 "for"           { return token(sym.FOR,      TipoToken.RES_FOR);      }
+"range"         { return token(sym.RANGE,    TipoToken.RES_RANGE);    }
 "break"         { return token(sym.BREAK,    TipoToken.RES_BREAK);    }
 "continue"      { return token(sym.CONTINUE, TipoToken.RES_CONTINUE);}
 "return"        { return token(sym.RETURN,   TipoToken.RES_RETURN);   }
+"switch"        { return token(sym.SWITCH,   TipoToken.RES_SWITCH);   }
+"case"          { return token(sym.CASE,     TipoToken.RES_CASE);     }
+"default"       { return token(sym.DEFAULT,  TipoToken.RES_DEFAULT);  }
+"struct"        { return token(sym.STRUCT,   TipoToken.RES_STRUCT);   }
+"type"          { return token(sym.TYPE,          TipoToken.RES_TYPE);         }
 
 /* Tipos */
 "int"           { return token(sym.TIPO_INT,     TipoToken.TIPO_INT);     }
@@ -108,15 +114,23 @@ ComBloque      = "/*"([^*]|\*+[^/*])*\*+"/"
 "false"         { return token(sym.BOOLEANO, TipoToken.LIT_BOOLEANO); }
 "nil"           { return token(sym.NIL,      TipoToken.LIT_NIL);      }
 
+/* Nativas de GoLite */
+"fmt.Println"        { return token(sym.FMT_PRINTLN, TipoToken.RES_FMT_PRINTLN); }
+"strconv.Atoi"       { return token(sym.STRCONV_ATOI, TipoToken.RES_STRCONV_ATOI); }
+"strconv.ParseFloat" { return token(sym.STRCONV_PARSEFLOAT, TipoToken.RES_STRCONV_PARSEFLOAT); }
+"reflect.TypeOf"     { return token(sym.REFLECT_TYPEOF, TipoToken.RES_REFLECT_TYPEOF); }
+"append"             { return token(sym.APPEND, TipoToken.RES_APPEND); }
+"len"                { return token(sym.LEN, TipoToken.RES_LEN); }
+"strings.Join"       { return token(sym.STRINGS_JOIN, TipoToken.RES_STRINGS_JOIN); }
+
 {Flotante}      { return token(sym.FLOTANTE, TipoToken.LIT_FLOTANTE); }
 {Entero}        { return token(sym.ENTERO,   TipoToken.LIT_ENTERO);   }
 {StringLit}     { return token(sym.STRING,   TipoToken.LIT_STRING);   }
 {RuneLit}       { return token(sym.RUNE_LIT, TipoToken.LIT_RUNE);     }
 
-/* Identificadores */
 {Identificador} { return token(sym.ID, TipoToken.IDENTIFICADOR); }
 
-/* Operadores y otros */
+/* Operadores y Símbolos */
 ":=" { return token(sym.ASIGN_CORTO, TipoToken.OP_ASIGN_CORTO); }
 "+=" { return token(sym.ASIGN_SUMA,  TipoToken.OP_ASIGN_SUMA);  }
 "-=" { return token(sym.ASIGN_RESTA, TipoToken.OP_ASIGN_RESTA); }
@@ -128,7 +142,7 @@ ComBloque      = "/*"([^*]|\*+[^/*])*\*+"/"
 "||" { return token(sym.OR,          TipoToken.OP_OR);          }
 "++" { return token(sym.INCREMENTO,  TipoToken.OP_INCREMENTO);  }
 "--" { return token(sym.DECREMENTO,  TipoToken.OP_DECREMENTO);  }
-
+":"   { return token(sym.DOS_PUNTOS, TipoToken.DOS_PUNTOS); }
 "+"  { return token(sym.SUMA,        TipoToken.OP_SUMA);        }
 "-"  { return token(sym.RESTA,       TipoToken.OP_RESTA);       }
 "*"  { return token(sym.MULT,        TipoToken.OP_MULT);        }
@@ -142,14 +156,14 @@ ComBloque      = "/*"([^*]|\*+[^/*])*\*+"/"
 ")"  { return token(sym.PAREN_CIERRA, TipoToken.PAREN_CIERRA);  }
 "{"  { return token(sym.LLAVE_ABRE,   TipoToken.LLAVE_ABRE);    }
 "}"  { return token(sym.LLAVE_CIERRA, TipoToken.LLAVE_CIERRA);  }
+"["  { return token(sym.COR_ABRE,     TipoToken.COR_ABRE);      }
+"]"  { return token(sym.COR_CIERRA,   TipoToken.COR_CIERRA);    }
 ";"  { return token(sym.PUNTO_COMA,   TipoToken.PUNTO_COMA);    }
 ","  { return token(sym.COMA,         TipoToken.COMA);          }
 "."  { return token(sym.PUNTO,        TipoToken.PUNTO);         }
 
-/* Fallback de error */
 [^] { errorLexico(yytext()); }
 
-/* Manejo explícito de EOF para inyectar un último ';' si es necesario y evitar cuelgues */
 <<EOF>> { 
     if (requierePuntoComa) {
         requierePuntoComa = false;

@@ -1,4 +1,4 @@
-package gui;
+ package gui;
 
 import javax.swing.*;
 import javax.swing.text.*;
@@ -41,7 +41,7 @@ public class ConsolaPanel extends JPanel {
         // Área de consola
     
         areaConsola = new JTextPane();
-        areaConsola.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        areaConsola.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 16));
         areaConsola.setEditable(false);
         areaConsola.setBackground(new Color(12, 12, 12));
         areaConsola.setCaretColor(Color.WHITE);
@@ -95,6 +95,8 @@ public class ConsolaPanel extends JPanel {
 
         });
     }
+
+    
 
     
       //Limpia completamente la consola.

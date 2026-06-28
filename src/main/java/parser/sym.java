@@ -14,15 +14,23 @@ public interface sym {
   public static final int UMINUS = 47;
   public static final int ENTERO = 2;
   public static final int STRCONV_ATOI = 23;
+  public static final int CASE = 57;
   public static final int DIFERENTE = 37;
   public static final int RESTA = 28;
+  public static final int DOS_PUNTOS = 54;
   public static final int CONTINUE = 19;
   public static final int TIPO_STRING = 10;
+  public static final int COR_CIERRA = 65;
+  public static final int STRINGS_JOIN = 62;
   public static final int PAREN_CIERRA = 49;
   public static final int FOR = 17;
   public static final int NOT = 44;
   public static final int AND = 42;
+  public static final int RANGE = 63;
+  public static final int APPEND = 60;
   public static final int IGUAL = 36;
+  public static final int COR_ABRE = 64;
+  public static final int TYPE = 55;
   public static final int NIL = 7;
   public static final int OR = 43;
   public static final int DIV = 30;
@@ -41,9 +49,11 @@ public interface sym {
   public static final int COMA = 53;
   public static final int MENOR = 38;
   public static final int MOD = 31;
+  public static final int TK_PACKAGE = 66;
   public static final int BREAK = 18;
   public static final int LLAVE_ABRE = 50;
   public static final int TIPO_INT = 8;
+  public static final int SWITCH = 56;
   public static final int ASIGNACION = 32;
   public static final int MAYOR = 39;
   public static final int ASIGN_RESTA = 35;
@@ -51,14 +61,17 @@ public interface sym {
   public static final int ELSE = 16;
   public static final int PUNTO = 21;
   public static final int FUNC = 14;
+  public static final int DEFAULT = 58;
   public static final int MAYOR_IGUAL = 41;
   public static final int STRCONV_PARSEFLOAT = 24;
   public static final int TIPO_BOOL = 11;
   public static final int ASIGN_CORTO = 33;
   public static final int BOOLEANO = 6;
+  public static final int LEN = 61;
   public static final int STRING = 4;
   public static final int LLAVE_CIERRA = 51;
   public static final int MENOR_IGUAL = 40;
+  public static final int STRUCT = 59;
   public static final int VAR = 13;
   public static final int FLOTANTE = 3;
   public static final int FMT_PRINTLN = 22;
@@ -116,7 +129,20 @@ public interface sym {
   "LLAVE_ABRE",
   "LLAVE_CIERRA",
   "PUNTO_COMA",
-  "COMA"
+  "COMA",
+  "DOS_PUNTOS",
+  "TYPE",
+  "SWITCH",
+  "CASE",
+  "DEFAULT",
+  "STRUCT",
+  "APPEND",
+  "LEN",
+  "STRINGS_JOIN",
+  "RANGE",
+  "COR_ABRE",
+  "COR_CIERRA",
+  "TK_PACKAGE"
   };
 }
 

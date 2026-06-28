@@ -18,7 +18,7 @@ public class NodoContinue extends NodoSentencia {
         throw new ContinueException(linea, columna);
     }
 
-    @Override
+  @Override
     public String toAST(int nivel) {
         return indent(nivel) + "Continue\n";
     }

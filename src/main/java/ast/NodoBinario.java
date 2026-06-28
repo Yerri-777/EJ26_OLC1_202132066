@@ -3,22 +3,6 @@ package ast;
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
 
-/**
- * NodoBinario — Operación con dos operandos.
- *
- * Cubre TODOS los operadores del PDF:
- *   Aritméticos : +  -  *  /  %
- *   Asignación  : los usa NodoAsignacionCompuesta delegando aquí
- *   Comparación : ==  !=  <  >  <=  >=
- *   Lógicos     : &&  ||
- *
- *Operadores Aritméticos):
- *   int op int          int
- *   int op float64      float64
- *   float64 op int      float64
- *   float64 op float64  float64
- *   string + string     string   (solo para +)
- */
 public class NodoBinario extends NodoExpresion {
 
     private final String        operador;
@@ -36,40 +20,51 @@ public class NodoBinario extends NodoExpresion {
     }
 
     @Override
-    public Object getValue(Entorno entorno) {
-        Object izq = izquierdo.getValue(entorno);
-        Object der = derecho.getValue(entorno);
+    public Object execute(Entorno entorno) {
+        // CAMBIO CRÍTICO: Llamar a execute() de los hijos, NO a getValue()
+        // Si un hijo retorna null, lo atrapamos aquí mismo.
+        Object izq = izquierdo.execute(entorno);
+        Object der = derecho.execute(entorno);
 
-        // Nil check — ninguna operación sobre nil es válida
         if (izq == null || der == null) {
             throw new ErrorSemanticoException(
-                "Operación '" + operador + "' no válida sobre un valor nil.",
+                "La operación '" + operador + "' no puede ejecutarse porque uno de sus operandos es nulo.",
                 linea, columna
             );
         }
 
+        Object resultado;
         switch (operador) {
-            case "+":  return opSuma(izq, der);
-            case "-":  return opResta(izq, der);
-            case "*":  return opMult(izq, der);
-            case "/":  return opDiv(izq, der);
-            case "%":  return opMod(izq, der);
-            case "==": return opIgualdad(izq, der, true);
-            case "!=": return opIgualdad(izq, der, false);
-            case "<":  return opRelacional(izq, der, "<");
-            case ">":  return opRelacional(izq, der, ">");
-            case "<=": return opRelacional(izq, der, "<=");
-            case ">=": return opRelacional(izq, der, ">=");
-            case "&&": return opAnd(izq, der);
-            case "||": return opOr(izq, der);
+            case "+":  resultado = opSuma(izq, der); break;
+            case "-":  resultado = opResta(izq, der); break;
+            case "*":  resultado = opMult(izq, der); break;
+            case "/":  resultado = opDiv(izq, der); break;
+            case "%":  resultado = opMod(izq, der); break;
+            case "==": resultado = opIgualdad(izq, der, true); break;
+            case "!=": resultado = opIgualdad(izq, der, false); break;
+            case "<":  resultado = opRelacional(izq, der, "<"); break;
+            case ">":  resultado = opRelacional(izq, der, ">"); break;
+            case "<=": resultado = opRelacional(izq, der, "<="); break;
+            case ">=": resultado = opRelacional(izq, der, ">="); break;
+            case "&&": resultado = opAnd(izq, der); break;
+            case "||": resultado = opOr(izq, der); break;
             default:
                 throw new ErrorSemanticoException(
                     "Operador binario desconocido: '" + operador + "'.", linea, columna
                 );
         }
+
+        // Blindaje final: Nunca retornar null
+        if (resultado == null) {
+            throw new ErrorSemanticoException(
+                "Resultado de operación '" + operador + "' es nulo (error interno).", linea, columna
+            );
+        }
+        
+        return resultado;
     }
 
-    //Suma 
+    // Suma 
     private Object opSuma(Object izq, Object der) {
         // string + string → concatenación
         if (izq instanceof String && der instanceof String) {
@@ -86,7 +81,7 @@ public class NodoBinario extends NodoExpresion {
         throw errorTipos("+", izq, der);
     }
 
-    //  Resta 
+    // Resta 
     private Object opResta(Object izq, Object der) {
         if (isInt(izq) && isInt(der))           return toInt(izq) - toInt(der);
         if (isNumerico(izq) && isNumerico(der)) return toDouble(izq) - toDouble(der);
@@ -203,9 +198,7 @@ public class NodoBinario extends NodoExpresion {
         return (Boolean) izq || (Boolean) der;
     }
 
-    // Utilidades de tipos 
-
-    /**int y rune son ambos Integer en Java */
+  
     private boolean isInt(Object v)      { return v instanceof Integer; }
     private boolean isNumerico(Object v) { return v instanceof Integer || v instanceof Double; }
 
@@ -235,10 +228,19 @@ public class NodoBinario extends NodoExpresion {
         );
     }
 
-    @Override
+  @Override
     public String toAST(int nivel) {
-        return indent(nivel) + "Binario: " + operador + "\n" +
-               izquierdo.toAST(nivel + 1) +
-               derecho.toAST(nivel + 1);
+        StringBuilder sb = new StringBuilder();
+        sb.append(indent(nivel)).append("ExpresionBinaria\n");
+        sb.append(indent(nivel + 1)).append("Operador: ").append(operador).append("\n");
+        if (izquierdo != null) sb.append(izquierdo.toAST(nivel + 1));
+        if (derecho != null) sb.append(derecho.toAST(nivel + 1));
+        return sb.toString();
+    }
+
+    @Override
+    public Object getValue(Entorno entorno) {
+        
+        return this.execute(entorno);
     }
 }

@@ -2,12 +2,6 @@ package ast;
 
 import entorno.Entorno;
 
-/**
- * Nodo Clase abstracta raíz de toda la jerarquía del AST GoLite.
- *   Herencia: todos los nodos extienden esta clase
- *  Polimorfismo: execute() y getValue() se sobreescriben en cada subclase
- *   Encapsulamiento: línea y columna son protected para subclases
- */
 public abstract class Nodo {
 
     protected final int linea;
@@ -21,16 +15,24 @@ public abstract class Nodo {
     public int getLinea()   { return linea;   }
     public int getColumna() { return columna; }
 
-   
-     
+    // Ejecución de sentencias 
     public abstract Object execute(Entorno entorno);
 
   
-    public abstract String toAST(int nivel);
+    public Object getValue(Entorno entorno) {
+        throw new UnsupportedOperationException("El nodo no retorna valor: " + this.getClass().getSimpleName());
+    }
 
-    // Utilidad para indentación del AST
+    
+    public void assign(Entorno entorno, Object valor) {
+        throw new UnsupportedOperationException("El nodo no admite asignación: " + this.getClass().getSimpleName());
+    }
+
+    
+    
+    public abstract String toAST(int nivel);
 
     protected String indent(int nivel) {
         return "  ".repeat(nivel);
     }
-}
+    }

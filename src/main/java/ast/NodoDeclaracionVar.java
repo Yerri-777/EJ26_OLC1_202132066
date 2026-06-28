@@ -2,20 +2,18 @@ package ast;
 
 import entorno.Entorno;
 import excepciones.ErrorSemanticoException;
-
+import java.util.HashMap;
+import java.util.ArrayList;
 
 public class NodoDeclaracionVar extends NodoSentencia {
 
     private final String        nombre;
     private final NodoTipo      tipo;
-    private final NodoExpresion inicializador;
-    private final boolean       esExplicita;   // true = var, false = :=
+    private final NodoExpresion inicializador; // Debe ser NodoExpresion
+    private final boolean       esExplicita;   
 
-    public NodoDeclaracionVar(String nombre,
-                               NodoTipo tipo,
-                               NodoExpresion inicializador,
-                               boolean esExplicita,
-                               int linea, int columna) {
+   
+    public NodoDeclaracionVar(String nombre, NodoTipo tipo, NodoExpresion inicializador, boolean esExplicita, int linea, int columna) {
         super(linea, columna);
         this.nombre        = nombre;
         this.tipo          = tipo;
@@ -25,7 +23,6 @@ public class NodoDeclaracionVar extends NodoSentencia {
 
     @Override
     public Object execute(Entorno entorno) {
-        // Verificar que no exista en el mismo ámbito
         if (entorno.existeEnActual(nombre)) {
             throw new ErrorSemanticoException(
                 "La variable '" + nombre + "' ya fue declarada en este ámbito.",
@@ -37,19 +34,24 @@ public class NodoDeclaracionVar extends NodoSentencia {
         Object valorFinal;
 
         if (esExplicita) {
-            // ── var id tipo [= expr] ────────────────────────────────────────
             tipoFinal = tipo.getNombre();
 
             if (inicializador != null) {
                 Object valorExpr = inicializador.getValue(entorno);
                 valorFinal = convertirYValidar(valorExpr, tipoFinal);
             } else {
-                // Sin inicializador → valor por defecto del tipo
-                valorFinal = tipo.valorPorDefecto();
+                // INICIALIZACIÓN AUTOMÁTICA
+                if (tipoFinal.startsWith("[]")) {
+                    valorFinal = new ArrayList<Object>();
+                } else if (!isPrimitivo(tipoFinal)) {
+                    valorFinal = new HashMap<String, Object>();
+                } else {
+                    valorFinal = tipo.valorPorDefecto(); 
+                }
             }
         } else {
-            // ── id := expr ──────────────────────────────────────────────────
-            Object valorExpr = inicializador.getValue(entorno);
+            // Caso := (Declaración Corta)
+            Object valorExpr = (inicializador != null) ? inicializador.getValue(entorno) : null;
             tipoFinal  = inferirTipo(valorExpr);
             valorFinal = valorExpr;
         }
@@ -58,23 +60,14 @@ public class NodoDeclaracionVar extends NodoSentencia {
         return null;
     }
 
-    /**
-     * Valida compatibilidad de tipos y aplica conversión implícita 
-     */
     private Object convertirYValidar(Object valor, String tipoDeclarado) {
-        if (valor == null) return null;  // nil
-
+        if (valor == null) return null; 
         String tipoValor = inferirTipo(valor);
 
-        // Conversión implícita int  float64 (
         if (tipoDeclarado.equals("float64") && tipoValor.equals("int")) {
             return ((Integer) valor).doubleValue();
         }
-
-        // Tipos idénticos OK
         if (tipoDeclarado.equals(tipoValor)) return valor;
-
-        // rune es alias de int en nuestro modelo
         if (tipoDeclarado.equals("rune") && tipoValor.equals("int")) return valor;
         if (tipoDeclarado.equals("int")  && tipoValor.equals("rune")) return valor;
 
@@ -91,18 +84,28 @@ public class NodoDeclaracionVar extends NodoSentencia {
         if (valor instanceof String)  return "string";
         if (valor instanceof Boolean) return "bool";
         if (valor instanceof Character) return "rune";
+        if (valor instanceof ArrayList || valor instanceof java.util.List) return "[]"; 
+        if (valor instanceof HashMap) return "struct";
         return "nil";  
+    }
+    
+    private boolean isPrimitivo(String tipoStr) {
+        return tipoStr.equals("int") || tipoStr.equals("float64") || 
+               tipoStr.equals("string") || tipoStr.equals("bool") || 
+               tipoStr.equals("rune") || tipoStr.equals("nil");
     }
 
     @Override
     public String toAST(int nivel) {
         StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel))
-          .append(esExplicita ? "DeclVar: " : "DeclCorta: ")
-          .append(nombre);
-        if (tipo != null) sb.append(" ").append(tipo.getNombre());
-        sb.append("\n");
-        if (inicializador != null) sb.append(inicializador.toAST(nivel + 1));
+        sb.append(indent(nivel)).append(esExplicita ? "DeclaracionVar\n" : "DeclaracionCorta\n");
+        sb.append(indent(nivel + 1)).append("ID: ").append(nombre).append("\n");
+        if (tipo != null) {
+            sb.append(indent(nivel + 1)).append("Tipo: ").append(tipo.getNombre()).append("\n");
+        }
+        if (inicializador != null) {
+            sb.append(inicializador.toAST(nivel + 1));
+        }
         return sb.toString();
     }
 }

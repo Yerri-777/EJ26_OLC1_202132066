@@ -9,7 +9,6 @@ import java.awt.event.*;
 import java.io.*;
 import java.nio.file.*;
 
-
 public class MainFrame extends JFrame {
 
     // Componentes principales 
@@ -141,14 +140,14 @@ public class MainFrame extends JFrame {
         JMenuItem itemErrores = new JMenuItem("Reporte de Errores");
         JMenuItem itemTokens  = new JMenuItem("Tabla de Tokens");
 
-        JMenuItem itemSimbolos = new JMenuItem("Tabla de Símbolos  (Fase 2)");
-        JMenuItem itemAST      = new JMenuItem("Reporte AST        (Fase 2)");
+        JMenuItem itemSimbolos = new JMenuItem("Tabla de Símbolos  ");
+        JMenuItem itemAST      = new JMenuItem("Reporte AST        ");
 
         itemErrores.addActionListener(e -> mostrarReporteErrores());
         itemTokens.addActionListener(e  -> mostrarReporteTokens());
-        itemSimbolos.setEnabled(false);
-        itemAST.setEnabled(false);
-
+        itemSimbolos.addActionListener(e -> mostrarReporteSimbolos());
+        itemAST.addActionListener(e -> mostrarReporteAST());
+    
         menu.add(itemErrores);
         menu.add(itemTokens);
         menu.addSeparator();
@@ -330,7 +329,44 @@ public class MainFrame extends JFrame {
         ReporteFrame reporte = new ReporteFrame("Tabla de Tokens", html);
         reporte.setVisible(true);
     }
+    
+    private void mostrarReporteSimbolos() {
+        // Llama al singleton del compilador para obtener el HTML generado en el Entorno
+        String html = Compiler.getInstance().getReporteSimbolosHTML();
+        ReporteFrame reporte = new ReporteFrame("Tabla de Símbolos (Fase 2)", html);
+        reporte.setVisible(true);
+    }
 
+   private void mostrarReporteAST() {
+        String html = Compiler.getInstance().getReporteASTHTML();
+        if (html == null || html.isBlank()) {
+            JOptionPane.showMessageDialog(this, "No hay código compilado o hubo un error fatal.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            // Creamos un archivo temporal en tu sistema
+            File tempFile = File.createTempFile("ReporteAST_GoLite_", ".html");
+            Files.writeString(tempFile.toPath(), html);
+
+            // Le pedimos al Sistema Operativo que lo abra en el navegador por defecto
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(tempFile.toURI());
+                if (consolaPanel != null) {
+                    consolaPanel.escribir("[OK] Reporte AST interactivo generado y abierto en el navegador.\n");
+                }
+            } else {
+                // Si por alguna razón el SO bloquea abrir pestañas, mostramos dónde se guardó
+                JOptionPane.showMessageDialog(this,
+                    "No se pudo abrir el navegador de forma automática.\nEl reporte se guardó en:\n" + tempFile.getAbsolutePath(),
+                    "Navegador", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                "Error al generar el reporte AST:\n" + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
     // Utilidades internas 
 
     private void agregarTab(EditorTab tab, String titulo) {

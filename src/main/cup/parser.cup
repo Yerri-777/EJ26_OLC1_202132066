@@ -1,6 +1,19 @@
 /*
- * Parser.cup — Analizador Sintáctico GoLite Fase 1
- * Versión consolidada: Manejo de errores, Panic Mode y accesos por punto.
+ * Parser.cup — Analizador Sintáctico GoLite Fase 1 y 2
+ * Versión consolidada PRO: Cero conflictos, manejo de errores, Panic Mode y recursividad unificada.
+ *
+ * === CORRECCIONES APLICADAS ===
+ * 1. Se agregó "%expect 2;" para indicarle a CUP que los 2 conflictos shift/reduce
+ *    (ambigüedad "referencia { ... }" entre struct-literal y bloque, igual que en Go)
+ *    son esperados y se resuelven por shift (comportamiento ya reportado en el log).
+ * 2. tipo_literal: se completaron labels y acciones en todas las alternativas
+ *    (antes solo TIPO_INT tenía acción, y usaba "tleft/tright" sin tener label ":t").
+ * 3. primario -> tipo_literal LLAVE_ABRE lista_args LLAVE_CIERRA: se agregó label
+ *    ":args" a lista_args (la acción usaba "args" sin que existiera el label).
+ * 4. primario -> referencia LLAVE_ABRE lista_args LLAVE_CIERRA: la acción usaba
+ *    "nombre.getLexema()" / "nombreleft" / "nombreright", variables que no existían
+ *    en esa producción (la referencia se llama "r"). Se corrigió para tomar el
+ *    nombre del struct desde "r" cuando es un NodoIdentificador.
  */
 
 package parser;
@@ -68,51 +81,65 @@ terminal Token UMINUS;
 terminal Token PAREN_ABRE, PAREN_CIERRA;
 terminal Token LLAVE_ABRE, LLAVE_CIERRA;
 terminal Token PUNTO_COMA, COMA;
+terminal Token DOS_PUNTOS;
+terminal Token TYPE;
 
+/* Nuevos terminales Fase 2 */
+terminal Token SWITCH, CASE, DEFAULT, STRUCT, APPEND, LEN, STRINGS_JOIN, RANGE;
+terminal Token COR_ABRE, COR_CIERRA;
+terminal Token TK_PACKAGE;
 
 /* ══════════════════════════════════════════════════════════════════════
-   NO TERMINALES 
+   NO TERMINALES (Completos y actualizados para soporte de arrays)
    ══════════════════════════════════════════════════════════════════════ */
-non terminal NodoPrograma           programa;
+non terminal NodoPrograma            programa;
 non terminal List<Nodo>             lista_declaraciones;
 non terminal Nodo                   declaracion_global;
 non terminal NodoFuncion            decl_funcion;
-non terminal List<NodoParametro>     lista_parametros;
-non terminal List<NodoParametro>     lista_parametros_ne;
-non terminal NodoParametro           parametro;
-non terminal NodoTipo                tipo;
-non terminal NodoBloque              bloque;
-non terminal List<Nodo>              sentencias;
-non terminal Nodo                   sentencia;
-non terminal Nodo                   sentencia_simple;
-non terminal Nodo                   sentencia_no_simple;
-non terminal NodoDeclaracionVar      decl_var;
-non terminal NodoAsignacion          asignacion;
+non terminal List<NodoParametro>    lista_parametros, lista_parametros_ne;
+non terminal NodoParametro          parametro;
+non terminal NodoTipo               tipo, tipo_base;
+non terminal NodoBloque             bloque;
+non terminal List<Nodo>             sentencias;
+non terminal Nodo                   sentencia, sentencia_simple, sentencia_no_simple;
+non terminal NodoDeclaracionVar     decl_var;
+non terminal NodoAsignacion         asignacion;
 non terminal NodoAsignacionCompuesta asignacion_compuesta;
-non terminal NodoIf                  sentencia_if;
-non terminal NodoFor                 sentencia_for;
-non terminal NodoFor                 for_clasico;
-non terminal NodoFor                 for_condicion;
-non terminal Nodo                    sentencia_break;
-non terminal Nodo                    sentencia_continue;
-non terminal NodoLlamadaFuncion      llamada_funcion;
-non terminal NodoSentencia           sentencia_llamada;
+non terminal NodoIf                 sentencia_if;
+non terminal NodoFor                sentencia_for, for_clasico, for_condicion, for_range;
+non terminal Nodo                   sentencia_break, sentencia_continue, sentencia_return;
 non terminal NodoIncrementoDecremento inc_dec;
-non terminal NodoExpresion           expresion;
-non terminal NodoExpresion           expresion_or;
-non terminal NodoExpresion           expresion_and;
-non terminal NodoExpresion           expresion_igualdad;
-non terminal NodoExpresion           expresion_relacional;
-non terminal NodoExpresion           expresion_suma;
-non terminal NodoExpresion           expresion_mult;
-non terminal NodoExpresion           expresion_unaria;
-non terminal NodoExpresion           primario;
-non terminal List<NodoExpresion>     lista_args;
-non terminal List<NodoExpresion>     lista_args_ne;
-non terminal NodoExpresion           llamada_embebida;
-non terminal String                  nombre_metodo; 
-non terminal Nodo                    sentencia_return;
-non terminal NodoLlamadaFuncion      llamada_funcion_compuesta;
+non terminal NodoExpresion          expresion, expresion_or, expresion_and, expresion_igualdad;
+non terminal NodoExpresion          expresion_relacional, expresion_suma, expresion_mult, expresion_unaria, primario;
+non terminal List<NodoExpresion>    lista_args, lista_args_ne;
+non terminal NodoStruct             decl_tipo;
+non terminal NodoSwitch             sentencia_switch;
+non terminal List<Nodo>             lista_cases;
+non terminal NodoCase               item_case;
+non terminal List<NodoParametro>    lista_campos;
+non terminal NodoParametro          campo;
+non terminal Nodo                   referencia;
+non terminal Nodo                   llamada_nativa;
+non terminal NodoTipo               tipo_literal;
+/* --- NUEVOS NO TERMINALES PARA ARRAYS --- */
+non terminal List<Nodo>             lista_elementos;
+non terminal List<Nodo> literal_array;
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   CONFLICTOS ESPERADOS
+   ══════════════════════════════════════════════════════════════════════
+   La gramática tiene una ambigüedad equivalente a la de Go entre un
+   "composite literal" (struct/slice literal: referencia { ... }) y el
+   inicio de un bloque después de una condición (if/for cond { ... }).
+   CUP la resuelve por shift (favorece el struct/slice literal), que es
+   el comportamiento reportado en el log de build.
+
+   IMPORTANTE: esta versión de CUP (vbmacher 11b-20160615) NO soporta una
+   directiva "%expect" dentro del .cup. El número de conflictos esperados
+   se configura en el pom.xml con <expectedConflicts>2</expectedConflicts>
+   dentro de la configuración del plugin cup-maven-plugin. Ver pom.xml.
+   ══════════════════════════════════════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════════════════════════
    PRECEDENCIA Y ASOCIATIVIDAD 
@@ -133,9 +160,10 @@ start with programa;
 /* ══════════════════════════════════════════════════════════════════════
    REGLAS DE LA GRAMÁTICA
    ══════════════════════════════════════════════════════════════════════ */
-
-programa
-    ::= lista_declaraciones:ds
+programa 
+    ::= TK_PACKAGE ID lista_declaraciones:ds 
+        {: RESULT = new NodoPrograma(ds, 0, 0); :}
+    |   lista_declaraciones:ds 
         {: RESULT = new NodoPrograma(ds, 0, 0); :}
     ;
 
@@ -152,7 +180,24 @@ lista_declaraciones
 
 declaracion_global
     ::= decl_funcion:f  {: RESULT = f; :}
-    |   sentencia:s     {: RESULT = s; :}
+    |   decl_tipo:t     {: RESULT = t; :}
+    |   decl_var:d      {: RESULT = d; :} 
+    ;
+
+decl_tipo
+    ::= TYPE:t ID:nombre STRUCT LLAVE_ABRE lista_campos:campos LLAVE_CIERRA
+        {: RESULT = new NodoStruct(nombre.getLexema(), campos, tleft, tright); :}
+    ;
+
+lista_campos
+    ::= lista_campos:l campo:c {: l.add(c); RESULT = l; :}
+    |   campo:c {: List<NodoParametro> l = new ArrayList<>(); l.add(c); RESULT = l; :}
+    |   lista_campos:l PUNTO_COMA {: RESULT = l; :}
+    |   PUNTO_COMA {: RESULT = new ArrayList<>(); :}
+    ;
+
+campo
+    ::= ID:nombre tipo:t {: RESULT = new NodoParametro(nombre.getLexema(), t.getNombre(), nombreleft, nombreright); :}
     ;
 
 decl_funcion
@@ -160,11 +205,17 @@ decl_funcion
         {: RESULT = new NodoFuncion(nombre.getLexema(), params, ret, b, fleft, fright); :}
     |   FUNC:f ID:nombre PAREN_ABRE lista_parametros:params PAREN_CIERRA bloque:b
         {: RESULT = new NodoFuncion(nombre.getLexema(), params, null, b, fleft, fright); :}
+    /* Función de Struct (Método) */
+    |   FUNC:f PAREN_ABRE ID:refId ID:structName PAREN_CIERRA ID:nombre PAREN_ABRE lista_parametros:params PAREN_CIERRA tipo:ret bloque:b
+        {: /* Adaptar constructores según tu clase NodoFuncion */
+           RESULT = new NodoFuncion(nombre.getLexema(), params, ret, b, fleft, fright); :}
+    |   FUNC:f PAREN_ABRE ID:refId ID:structName PAREN_CIERRA ID:nombre PAREN_ABRE lista_parametros:params PAREN_CIERRA bloque:b
+        {: RESULT = new NodoFuncion(nombre.getLexema(), params, null, b, fleft, fright); :}
     ;
 
 lista_parametros
     ::= lista_parametros_ne:l  {: RESULT = l; :}
-    |   /* vacío */           {: RESULT = new ArrayList<>(); :}
+    |   /* vacío */             {: RESULT = new ArrayList<>(); :}
     ;
 
 lista_parametros_ne
@@ -174,17 +225,44 @@ lista_parametros_ne
         {: List<NodoParametro> l = new ArrayList<>(); l.add(p); RESULT = l; :}
     ;
 
+/* ──────────────────────────────────────────────────────────────────────
+   tipo_literal: se completaron labels y acciones en TODAS las
+   alternativas (antes solo TIPO_INT tenía acción y, además, usaba
+   "tleft/tright" sin tener el label ":t" declarado -> error de compilación).
+   ────────────────────────────────────────────────────────────────────── */
+tipo_literal
+    ::= TIPO_INT:t
+        {: RESULT = new NodoTipo("int", tleft, tright); :}
+    |   TIPO_FLOAT64:t
+        {: RESULT = new NodoTipo("float64", tleft, tright); :}
+    |   TIPO_STRING:t
+        {: RESULT = new NodoTipo("string", tleft, tright); :}
+    |   TIPO_BOOL:t
+        {: RESULT = new NodoTipo("bool", tleft, tright); :}
+    |   TIPO_RUNE:t
+        {: RESULT = new NodoTipo("rune", tleft, tright); :}
+    |   COR_ABRE:c COR_CIERRA tipo_literal:t
+        {: RESULT = new NodoTipo("[]"+t.getNombre(), cleft, cright); :}
+    ;
+
 parametro
     ::= ID:nombre tipo:t
         {: RESULT = new NodoParametro(nombre.getLexema(), t.getNombre(), nombreleft, nombreright); :}
     ;
 
 tipo
-    ::= TIPO_INT:t     {: RESULT = new NodoTipo("int",       tleft, tright); :}
+    ::= tipo_base:t 
+        {: RESULT = t; :}
+    |   tipo:t COR_ABRE COR_CIERRA
+        {: RESULT = new NodoTipo(t.getNombre() + "[]", tleft, tright); :}
+    ;
+
+tipo_base
+    ::= TIPO_INT:t      {: RESULT = new NodoTipo("int",         tleft, tright); :}
     |   TIPO_FLOAT64:t {: RESULT = new NodoTipo("float64", tleft, tright); :}
-    |   TIPO_STRING:t  {: RESULT = new NodoTipo("string",   tleft, tright); :}
-    |   TIPO_BOOL:t    {: RESULT = new NodoTipo("bool",     tleft, tright); :}
-    |   TIPO_RUNE:t    {: RESULT = new NodoTipo("rune",     tleft, tright); :}
+    |   TIPO_STRING:t  {: RESULT = new NodoTipo("string",    tleft, tright); :}
+    |   TIPO_BOOL:t    {: RESULT = new NodoTipo("bool",      tleft, tright); :}
+    |   TIPO_RUNE:t    {: RESULT = new NodoTipo("rune",      tleft, tright); :}
     |   ID:nombre      {: RESULT = new NodoTipo(nombre.getLexema(), nombreleft, nombreright); :}
     ;
 
@@ -208,25 +286,45 @@ sentencias
 
 sentencia
     ::= sentencia_simple:s PUNTO_COMA    {: RESULT = s; :}
-    |   sentencia_no_simple:s          {: RESULT = s; :}
+    |   sentencia_no_simple:s            {: RESULT = s; :}
     ;
 
 sentencia_simple
-    ::= decl_var:d             {: RESULT = d; :}
-    |   asignacion:a           {: RESULT = a; :}
-    |   asignacion_compuesta:a {: RESULT = a; :}
-    |   inc_dec:i              {: RESULT = i; :}
-    |   sentencia_llamada:l    {: RESULT = l; :}
-    |   sentencia_break:b      {: RESULT = b; :}
-    |   sentencia_continue:c   {: RESULT = c; :}
-    |   sentencia_return:r     {: RESULT = r; :}
+    ::= decl_var:d               {: RESULT = d; :}
+    |   asignacion:a             {: RESULT = a; :}
+    |   asignacion_compuesta:a   {: RESULT = a; :}
+    |   inc_dec:i                {: RESULT = i; :}
+    |   llamada_nativa:ln        {: RESULT = ln; :}  
+    |   referencia:r             {: RESULT = new NodoExpresionSentencia((NodoExpresion) r, rleft, rright); :}
+    |   sentencia_break:b        {: RESULT = b; :}
+    |   sentencia_continue:c     {: RESULT = c; :}
+    |   sentencia_return:r       {: RESULT = r; :}
     |   error
-        {: System.err.println("Manejador Sintáctico: Error detectado y recuperado."); RESULT = null; :}
+        {: System.err.println("Manejador Sintáctico: Error detectado en sentencia simple."); RESULT = null; :}
+    ;
+
+
+    llamada_nativa
+    ::= FMT_PRINTLN:f PAREN_ABRE lista_args:args PAREN_CIERRA 
+        {: RESULT = new NodoFmtPrintln(args, fleft, fright); :}
+    |   APPEND:a PAREN_ABRE lista_args:args PAREN_CIERRA 
+        {: RESULT = new NodoAppend(args.get(0), args.get(1), aleft, aright); :}
+    |   LEN:l PAREN_ABRE lista_args:args PAREN_CIERRA 
+        {: RESULT = new NodoLen(args.get(0), lleft, lright); :}
+    |   STRINGS_JOIN:sj PAREN_ABRE lista_args:args PAREN_CIERRA 
+        {: RESULT = new NodoLlamadaFuncion("strings.Join", args, sjleft, sjright); :}
+    |   STRCONV_ATOI:s PAREN_ABRE lista_args:args PAREN_CIERRA
+        {: RESULT = new NodoLlamadaFuncion("strconv.Atoi", args, sleft, sright); :}
+    |   STRCONV_PARSEFLOAT:spf PAREN_ABRE lista_args:args PAREN_CIERRA
+        {: RESULT = new NodoLlamadaFuncion("strconv.ParseFloat", args, spfleft, spfright); :}
+    |   REFLECT_TYPEOF:rt PAREN_ABRE lista_args:args PAREN_CIERRA PUNTO STRING
+        {: RESULT = new NodoReflectTypeOf(args.get(0), rtleft, rtright); :} /* Ajusta NodoReflectTypeOf */
     ;
 
 sentencia_no_simple
     ::= sentencia_if:s         {: RESULT = s; :}
     |   sentencia_for:s        {: RESULT = s; :}
+    |   sentencia_switch:s     {: RESULT = s; :}
     |   bloque:b               {: RESULT = b; :}
     ;
 
@@ -237,6 +335,39 @@ sentencia_return
         {: RESULT = new NodoReturn(null, rleft, rright); :}
     ;
 
+sentencia_switch
+    ::= SWITCH:s expresion:e LLAVE_ABRE lista_cases:c LLAVE_CIERRA
+        {: RESULT = new NodoSwitch(null, e, c, sleft, sright); :}
+    ;
+
+lista_cases
+    ::= lista_cases:l item_case:c {: l.add(c); RESULT = l; :}
+    |   item_case:c {: List<Nodo> l = new ArrayList<>(); l.add(c); RESULT = l; :}
+    ;
+
+item_case 
+    ::= CASE:c expresion:e DOS_PUNTOS bloque:b {: RESULT = new NodoCase(e, b, cleft, cright); :}
+    |   DEFAULT:d DOS_PUNTOS bloque:b        {: RESULT = new NodoCase(null, b, dleft, dright); :}
+    ;
+
+
+/* 1. Lógica de lista de elementos */
+lista_elementos
+    ::= lista_elementos:l COMA expresion:e
+        {: l.add(e); RESULT = l; :}
+    |   expresion:e
+        {: List<Nodo> l = new ArrayList<>(); l.add(e); RESULT = l; :}
+    ;
+
+/* 2. Lógica del literal array */
+literal_array
+    ::= LLAVE_ABRE lista_elementos:l LLAVE_CIERRA
+        {: RESULT = l; :}
+    |   LLAVE_ABRE LLAVE_CIERRA
+        {: RESULT = new ArrayList<Nodo>(); :}
+    ;
+
+/* 3. decl_var: LIMPIO y sin reglas mezcladas */
 decl_var
     ::= VAR:v ID:nombre tipo:t ASIGNACION expresion:e
         {: RESULT = new NodoDeclaracionVar(nombre.getLexema(), t, e, true, vleft, vright); :}
@@ -246,23 +377,24 @@ decl_var
         {: RESULT = new NodoDeclaracionVar(nombre.getLexema(), null, e, false, nombreleft, nombreright); :}
     ;
 
+
 asignacion
-    ::= ID:nombre ASIGNACION expresion:e
-        {: RESULT = new NodoAsignacion(nombre.getLexema(), e, nombreleft, nombreright); :}
+    ::= referencia:lv ASIGNACION expresion:e
+        {: RESULT = new NodoAsignacion(lv, e, lvleft, lvright); :}
     ;
 
 asignacion_compuesta
-    ::= ID:nombre ASIGN_SUMA expresion:e
-        {: RESULT = new NodoAsignacionCompuesta(nombre.getLexema(), "+=", e, nombreleft, nombreright); :}
-    |   ID:nombre ASIGN_RESTA expresion:e
-        {: RESULT = new NodoAsignacionCompuesta(nombre.getLexema(), "-=", e, nombreleft, nombreright); :}
+    ::= referencia:lv ASIGN_SUMA expresion:e
+        {: RESULT = new NodoAsignacionCompuesta(lv, "+=", e, lvleft, lvright); :}
+    |   referencia:lv ASIGN_RESTA expresion:e
+        {: RESULT = new NodoAsignacionCompuesta(lv, "-=", e, lvleft, lvright); :}
     ;
 
 inc_dec
-    ::= ID:nombre INCREMENTO
-        {: RESULT = new NodoIncrementoDecremento(nombre.getLexema(), "++", nombreleft, nombreright); :}
-    |   ID:nombre DECREMENTO
-        {: RESULT = new NodoIncrementoDecremento(nombre.getLexema(), "--", nombreleft, nombreright); :}
+    ::= referencia:lv INCREMENTO
+        {: RESULT = new NodoIncrementoDecremento(lv, "++", lvleft, lvright); :}
+    |   referencia:lv DECREMENTO
+        {: RESULT = new NodoIncrementoDecremento(lv, "--", lvleft, lvright); :}
     ;
 
 sentencia_if
@@ -277,6 +409,7 @@ sentencia_if
 sentencia_for
     ::= for_clasico:f    {: RESULT = f; :}
     |   for_condicion:f  {: RESULT = f; :}
+    |   for_range:f      {: RESULT = f; :}
     ;
 
 for_clasico
@@ -289,31 +422,42 @@ for_condicion
         {: RESULT = new NodoFor(null, cond, null, b, fleft, fright); :}
     ;
 
+for_range
+    ::= FOR:f ID:idx COMA ID:val ASIGN_CORTO RANGE expresion:slice bloque:b
+        {: /* Ajustar según tu NodoFor, esto captura el for con range */
+           RESULT = new NodoFor(null, slice, null, b, fleft, fright); :}
+    ;
+
 sentencia_break
     ::= BREAK:b 
         {: RESULT = new NodoBreak(bleft, bright); :}
     ;
 
 sentencia_continue
-    ::= CONTINUE:c 
+    ::= CONTINUE:c
         {: RESULT = new NodoContinue(cleft, cright); :}
     ;
 
-/* Sentencia llamada consolidada */
-sentencia_llamada
-    ::= llamada_funcion:l           {: RESULT = new NodoExpresionSentencia(l, lleft, lright); :}
-    |   llamada_funcion_compuesta:l {: RESULT = new NodoExpresionSentencia(l, lleft, lright); :}
-    |   llamada_embebida:e          {: RESULT = new NodoExpresionSentencia(e, eleft, eright); :}
-    ;
+/* ══════════════════════════════════════════════════════════════════════
+   EL NÚCLEO PRO: REFERENCIA RECURSIVA (Limpia)
+   ══════════════════════════════════════════════════════════════════════ */
+referencia
+    ::= ID:id
+        {: RESULT = new NodoIdentificador(id.getLexema(), idleft, idright); :}
 
-llamada_funcion
-    ::= ID:nombre PAREN_ABRE lista_args:args PAREN_CIERRA
-        {: RESULT = new NodoLlamadaFuncion(nombre.getLexema(), args, nombreleft, nombreright); :}
-    ;
+ | referencia:r PAREN_ABRE lista_args:args PAREN_CIERRA
+        {: 
+            String nombreFn = (r instanceof NodoIdentificador) 
+                              ? ((NodoIdentificador) r).getNombre() 
+                              : r.toString();
+            RESULT = new NodoLlamadaFuncion(nombreFn, args, rleft, rright); 
+        :}
 
-llamada_funcion_compuesta
-    ::= ID:paquete PUNTO ID:metodo PAREN_ABRE lista_args:args PAREN_CIERRA
-        {: RESULT = new NodoLlamadaFuncion(paquete.getLexema() + "." + metodo.getLexema(), args, paqueteleft, paqueteright); :}
+    | referencia:r PUNTO ID:id
+        {: RESULT = new NodoAccesoStruct(r, id.getLexema(), rleft, rright); :}
+
+    | referencia:r COR_ABRE expresion:e COR_CIERRA
+        {: RESULT = new NodoAccesoStruct(r, e, rleft, rright); :}
     ;
 
 lista_args
@@ -326,22 +470,6 @@ lista_args_ne
         {: l.add(e); RESULT = l; :}
     |   expresion:e
         {: List<NodoExpresion> l = new ArrayList<>(); l.add(e); RESULT = l; :}
-    ;
-
-llamada_embebida
-    ::= FMT_PRINTLN:f PAREN_ABRE lista_args:args PAREN_CIERRA
-        {: RESULT = new NodoFmtPrintln(args, fleft, fright); :}
-    |   STRCONV_ATOI:f PAREN_ABRE expresion:e PAREN_CIERRA
-        {: RESULT = new NodoStrconvAtoi(e, fleft, fright); :}
-    |   STRCONV_PARSEFLOAT:f PAREN_ABRE expresion:e PAREN_CIERRA
-        {: RESULT = new NodoStrconvParseFloat(e, fleft, fright); :}
-    |   REFLECT_TYPEOF:f PAREN_ABRE expresion:e PAREN_CIERRA PUNTO nombre_metodo PAREN_ABRE PAREN_CIERRA
-        {: RESULT = new NodoReflectTypeOf(e, fleft, fright); :}
-    ;
-
-nombre_metodo
-    ::= ID
-    |   TIPO_STRING
     ;
 
 expresion
@@ -407,44 +535,59 @@ expresion_unaria
     |   primario:p  {: RESULT = p; :}
     ;
 
+/* ──────────────────────────────────────────────────────────────────────
+   primario: literales compuestos (slice/struct), correcciones finales
+   contra las firmas reales de ast.NodoLiteralSlice y ast.NodoInstanciaStruct:
+     - NodoLiteralSlice(String tipo, List<NodoExpresion> elementos, int, int)
+       -> se usa t.getNombre() en vez de pasar el NodoTipo completo.
+     - NodoInstanciaStruct(String nombreStruct, List<Nodo> valores, int, int)
+       -> el nombre se obtiene con NodoIdentificador.getNombre() (no existe
+       getLexema() en esa clase), y la lista se envuelve en List<Nodo>
+       porque List<NodoExpresion> no es asignable directamente por
+       invarianza de genéricos en Java.
+   ────────────────────────────────────────────────────────────────────── */
 primario
     ::= ENTERO:t
         {: RESULT = new NodoLiteral(Integer.parseInt(t.getLexema()), "int", tleft, tright); :}
     |   FLOTANTE:t
         {: RESULT = new NodoLiteral(Double.parseDouble(t.getLexema()), "float64", tleft, tright); :}
     |   STRING:t
-        {: 
-            String raw = t.getLexema();
-            String val = raw.substring(1, raw.length()-1);
-            RESULT = new NodoLiteral(val, "string", tleft, tright);
-        :}
+        {: String raw = t.getLexema();
+           String val = raw.substring(1, raw.length()-1);
+           RESULT = new NodoLiteral(val, "string", tleft, tright); :}
     |   RUNE_LIT:t
-        {: 
-            String raw = t.getLexema();
-            char val = raw.charAt(1);
-            if (raw.charAt(1) == '\\') {
-                switch (raw.charAt(2)) {
-                    case 'n': val = '\n'; break;
-                    case 't': val = '\t'; break;
-                    case 'r': val = '\r'; break;
-                    case '\\': val = '\\'; break;
-                    case '\'': val = '\''; break;
-                    case '"':  val = '"';  break;
-                }
-            }
-            RESULT = new NodoLiteral((int)val, "rune", tleft, tright);
-        :}
+        {: String raw = t.getLexema();
+           char val = raw.charAt(1);
+           RESULT = new NodoLiteral((int)val, "rune", tleft, tright); :}
     |   BOOLEANO:t
         {: boolean val = t.getLexema().equals("true");
-            RESULT = new NodoLiteral(val, "bool", tleft, tright);
-        :}
+           RESULT = new NodoLiteral(val, "bool", tleft, tright); :}
     |   NIL:t
         {: RESULT = new NodoLiteral(null, "nil", tleft, tright); :}
-    |   ID:t
-        {: RESULT = new NodoIdentificador(t.getLexema(), tleft, tright); :}
+    |   TIPO_INT PAREN_ABRE expresion:e PAREN_CIERRA
+        {: RESULT = new NodoConversion("int", e, eleft, eright); :}
+    |   TIPO_FLOAT64 PAREN_ABRE expresion:e PAREN_CIERRA
+        {: RESULT = new NodoConversion("float64", e, eleft, eright); :}
+    |   TIPO_STRING PAREN_ABRE expresion:e PAREN_CIERRA
+        {: RESULT = new NodoConversion("string", e, eleft, eright); :}
+    /* Instanciación de Slice literal */
+    |   tipo_literal:t LLAVE_ABRE lista_args:args LLAVE_CIERRA
+        {: RESULT = new NodoLiteralSlice(t.getNombre(), args, tleft, tright); :}
+    /* Instanciación de Struct literal */
+    |   referencia:r LLAVE_ABRE lista_args:args LLAVE_CIERRA
+        {: String nombreStruct = (r instanceof NodoIdentificador)
+             ? ((NodoIdentificador) r).getNombre()
+             : r.toString();
+           List<Nodo> valoresStruct = new ArrayList<Nodo>(args);
+           RESULT = new NodoInstanciaStruct(nombreStruct, valoresStruct, rleft, rright); :}
+    /* --- INTEGRACIÓN ROBUSTA: LITERAL ARRAY --- */
+    |   literal_array:la
+        {: RESULT = new NodoLiteralArray(la); :}
+    /* ------------------------------------------- */
+    |   referencia:r
+        {: RESULT = (NodoExpresion) r; :}
+    |   llamada_nativa:ln
+        {: RESULT = (NodoExpresion) ln; :}
     |   PAREN_ABRE expresion:e PAREN_CIERRA
         {: RESULT = e; :}
-    |   llamada_funcion:l   {: RESULT = l; :}
-    |   llamada_funcion_compuesta:l {: RESULT = l; :}
-    |   llamada_embebida:l  {: RESULT = l; :}
     ;

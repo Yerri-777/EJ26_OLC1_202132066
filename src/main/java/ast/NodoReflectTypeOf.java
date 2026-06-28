@@ -30,8 +30,12 @@ public class NodoReflectTypeOf extends NodoExpresion {
         return v.getClass().getSimpleName();
     }
 
-    @Override
-    public String toAST(int nivel) {
-        return indent(nivel) + "ReflectTypeOf\n" + argumento.toAST(nivel + 1);
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("ReflectTypeOf\n");
+    if (argumento != null) {
+        sb.append(argumento.toAST(nivel + 1));
     }
-}
+    return sb.toString();
+} }

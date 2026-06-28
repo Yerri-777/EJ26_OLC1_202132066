@@ -1,0 +1,522 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  GRAMÁTICA FORMAL EN NOTACIÓN BNF                          ║
+║                         Lenguaje GoLite — Fase 1 y 2                          ║
+║                                                                              ║
+║  Organización de Lenguajes y Compiladores 1                                 ║
+║  Universidad San Carlos de Guatemala — Facultad de Ingeniería              ║
+║  Escuela de Vacaciones Junio 2026                                          ║
+║                                                                              ║
+║  Esta gramática es la especificación FORMAL de la gramática implementada   ║
+║  en Parser.cup (CUP) y Lexer.jflex (JFlex). Cada producción aquí descrita  ║
+║  corresponde exactamente a una regla del archivo .cup del proyecto.        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
+────────────────────────────────────────────────────────────────────────────────
+ÍNDICE
+────────────────────────────────────────────────────────────────────────────────
+  1. Notación y convenciones
+  2. Símbolo inicial
+  3. Gramática sintáctica completa (no terminales)
+  4. Gramática léxica (terminales / expresiones regulares)
+  5. Tabla de precedencia y asociatividad
+  6. Eliminación de ambigüedad y recursión izquierda
+  7. Palabras reservadas
+  8. Resumen de producciones
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. NOTACIÓN Y CONVENCIONES
+────────────────────────────────────────────────────────────────────────────────
+
+  ::=        "se define como" / "deriva en"
+  |          alternativa ("o")
+  ε          producción vacía (cadena vacía, epsilon)
+  < >        no terminal (símbolo que se sigue derivando)
+  "texto"    terminal literal (token concreto del lexer)
+  MAYÚSCULAS terminal con clase semántica (ej. ID, ENTERO, STRING)
+
+  Cada no terminal de esta gramática corresponde 1 a 1 con un símbolo
+  "non terminal" del archivo Parser.cup. Cada terminal corresponde 1 a 1
+  con un símbolo "terminal Token" del mismo archivo, generado por las
+  reglas léxicas de Lexer.jflex.
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. SÍMBOLO INICIAL
+────────────────────────────────────────────────────────────────────────────────
+
+  <programa>   es el axioma (símbolo distinguido) de la gramática.
+  Equivale a la declaración "start with programa;" en Parser.cup.
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. GRAMÁTICA SINTÁCTICA COMPLETA
+────────────────────────────────────────────────────────────────────────────────
+
+3.1 — Programa y declaraciones globales
+──────────────────────────────────────────────────────────────────────────────
+
+  <programa> ::= <declaraciones_globales>
+
+  <declaraciones_globales> ::= <declaraciones_globales> <declaracion_global>
+                              | ε
+
+  <declaracion_global> ::= <decl_funcion>
+
+
+3.2 — Funciones
+──────────────────────────────────────────────────────────────────────────────
+
+  <decl_funcion> ::= "func" ID "(" <lista_parametros> ")" <tipo> <bloque>
+                    | "func" ID "(" <lista_parametros> ")" <bloque>
+
+  <lista_parametros> ::= <lista_parametros_ne>
+                        | ε
+
+  <lista_parametros_ne> ::= <lista_parametros_ne> "," <parametro>
+                           | <parametro>
+
+  <parametro> ::= ID <tipo>
+
+
+3.3 — Tipos
+──────────────────────────────────────────────────────────────────────────────
+
+  <tipo> ::= "int"
+           | "float64"
+           | "string"
+           | "bool"
+           | "rune"
+           | ID                      (* nombre de struct — reservado Fase 2 *)
+
+
+3.4 — Bloques y sentencias
+──────────────────────────────────────────────────────────────────────────────
+
+  <bloque> ::= "{" <sentencias> "}"
+
+  <sentencias> ::= <sentencias> <sentencia>
+                  | ε
+
+  <sentencia> ::= <sentencia_simple> ";"
+                 | <sentencia_simple>
+                 | <sentencia_if>
+                 | <sentencia_for>
+                 | <bloque>
+
+  <sentencia_simple> ::= <decl_var>
+                        | <asignacion>
+                        | <asignacion_compuesta>
+                        | <inc_dec>
+                        | <sentencia_break>
+                        | <sentencia_continue>
+                        | <sentencia_llamada>
+
+
+3.5 — Declaración de variables
+──────────────────────────────────────────────────────────────────────────────
+
+  <decl_var> ::= "var" ID <tipo> "=" <expresion>
+               | "var" ID <tipo>
+               | ID ":=" <expresion>
+
+  Nota semántica (no codificada en la gramática, validada en el AST):
+    - La primera forma declara con tipo explícito y valor inicial.
+    - La segunda forma declara con tipo explícito sin valor; la variable
+      toma el valor por defecto de su tipo (0, 0.0, "", false, según tipo).
+    - La tercera forma (":=") infiere el tipo a partir del valor de
+      <expresion> en tiempo de interpretación.
+
+
+3.6 — Asignación
+──────────────────────────────────────────────────────────────────────────────
+
+  <asignacion> ::= ID "=" <expresion>
+
+  <asignacion_compuesta> ::= ID "+=" <expresion>
+                            | ID "-=" <expresion>
+
+  <inc_dec> ::= ID "++"
+              | ID "--"
+
+
+3.7 — Sentencias de control de flujo
+──────────────────────────────────────────────────────────────────────────────
+
+  <sentencia_if> ::= "if" <expresion> <bloque>
+                    | "if" <expresion> <bloque> "else" <bloque>
+                    | "if" <expresion> <bloque> "else" <sentencia_if>
+                    | "if" "(" <expresion> ")" <bloque>
+                    | "if" "(" <expresion> ")" <bloque> "else" <bloque>
+                    | "if" "(" <expresion> ")" <bloque> "else" <sentencia_if>
+
+  Nota: los paréntesis alrededor de la condición son sintácticamente
+  opcionales — ambas formas son válidas y producen el mismo NodoIf.
+  La recursión sobre <sentencia_if> en la rama "else" es lo que permite
+  cadenas "else if" arbitrariamente largas (ver sección 6.3).
+
+  <sentencia_for> ::= <for_clasico>
+                     | <for_condicion>
+
+  <for_clasico> ::= "for" <sentencia_simple> ";" <expresion> ";"
+                            <sentencia_simple> <bloque>
+
+  <for_condicion> ::= "for" <expresion> <bloque>
+
+  Nota: <for_condicion> es la forma "estilo while" — un for con
+  únicamente una condición de continuación, sin inicialización
+  ni incremento explícitos en la cabecera.
+
+  <sentencia_break>    ::= "break"
+  <sentencia_continue> ::= "continue"
+
+
+3.8 — Llamadas a funciones y funciones embebidas
+──────────────────────────────────────────────────────────────────────────────
+
+  <sentencia_llamada> ::= <llamada_funcion>
+                         | <llamada_embebida>
+
+  <llamada_funcion> ::= ID "(" <lista_args> ")"
+
+  <lista_args> ::= <lista_args_ne>
+                  | ε
+
+  <lista_args_ne> ::= <lista_args_ne> "," <expresion>
+                     | <expresion>
+
+  <llamada_embebida> ::= "fmt.Println"        "(" <lista_args> ")"
+                        | "strconv.Atoi"       "(" <expresion> ")"
+                        | "strconv.ParseFloat" "(" <expresion> ")"
+                        | "reflect.TypeOf"     "(" <expresion> ")"
+
+  Nota léxica importante: "fmt.Println", "strconv.Atoi",
+  "strconv.ParseFloat" y "reflect.TypeOf" son TOKENS ÚNICOS
+  reconocidos completos por el analizador léxico (ver 4.3) — no son
+  el resultado de una regla sintáctica ID "." ID. El lexer los
+  resuelve antes de que el identificador genérico {Identificador}
+  pueda hacer match parcial, evitando ambigüedad léxica.
+
+
+3.9 — Expresiones (gramática de precedencia en cascada)
+──────────────────────────────────────────────────────────────────────────────
+
+  La precedencia de operadores se implementa mediante una jerarquía de
+  no terminales: cada nivel solo puede combinarse con operadores de su
+  propio nivel o delegar al nivel inmediatamente más fuerte. Este es el
+  método estándar para eliminar ambigüedad de precedencia en gramáticas
+  LALR sin depender únicamente de las declaraciones %left/%right de CUP.
+
+  <expresion> ::= <expresion_or>
+
+  ── Nivel 8 (más débil): disyunción lógica ──────────────────────────
+  <expresion_or> ::= <expresion_or> "||" <expresion_and>
+                    | <expresion_and>
+
+  ── Nivel 7: conjunción lógica ──────────────────────────────────────
+  <expresion_and> ::= <expresion_and> "&&" <expresion_igualdad>
+                     | <expresion_igualdad>
+
+  ── Nivel 6: igualdad / desigualdad ─────────────────────────────────
+  <expresion_igualdad> ::= <expresion_igualdad> "==" <expresion_relacional>
+                          | <expresion_igualdad> "!=" <expresion_relacional>
+                          | <expresion_relacional>
+
+  ── Nivel 5: relacionales ───────────────────────────────────────────
+  <expresion_relacional> ::= <expresion_relacional> "<"  <expresion_suma>
+                            | <expresion_relacional> ">"  <expresion_suma>
+                            | <expresion_relacional> "<=" <expresion_suma>
+                            | <expresion_relacional> ">=" <expresion_suma>
+                            | <expresion_suma>
+
+  ── Nivel 4: suma y resta ───────────────────────────────────────────
+  <expresion_suma> ::= <expresion_suma> "+" <expresion_mult>
+                      | <expresion_suma> "-" <expresion_mult>
+                      | <expresion_mult>
+
+  ── Nivel 3: multiplicación, división, módulo ───────────────────────
+  <expresion_mult> ::= <expresion_mult> "*" <expresion_unaria>
+                      | <expresion_mult> "/" <expresion_unaria>
+                      | <expresion_mult> "%" <expresion_unaria>
+                      | <expresion_unaria>
+
+  ── Nivel 2: operadores unarios (asocian a la derecha) ──────────────
+  <expresion_unaria> ::= "-" <expresion_unaria>     %prec UMINUS
+                        | "!" <expresion_unaria>
+                        | <primario>
+
+  ── Nivel 1 (más fuerte): primarios ─────────────────────────────────
+  <primario> ::= ENTERO
+               | FLOTANTE
+               | STRING
+               | RUNE_LIT
+               | BOOLEANO
+               | "nil"
+               | ID
+               | "(" <expresion> ")"
+               | <llamada_funcion>
+               | <llamada_embebida>
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. GRAMÁTICA LÉXICA (TERMINALES)
+────────────────────────────────────────────────────────────────────────────────
+
+Esta sección define formalmente, mediante expresiones regulares, cada
+terminal usado en la sección 3. Corresponde exactamente a las macros y
+reglas de Lexer.jflex.
+
+4.1 — Clases de caracteres base
+──────────────────────────────────────────────────────────────────────────────
+
+  Digito        ::= [0-9]
+  Letra         ::= [a-zA-Z]
+  LetraOGuion   ::= [a-zA-Z_]
+  Espacio       ::= ( " " | "\t" | "\r" | "\n" )+        (* se descarta *)
+
+4.2 — Identificadores y literales
+──────────────────────────────────────────────────────────────────────────────
+
+  ID            ::= LetraOGuion ( LetraOGuion | Digito )*
+
+  ENTERO        ::= Digito+
+
+  FLOTANTE      ::= Digito+ "." Digito+
+
+  STRING        ::= '"' ( [^"\\] | "\\" . )* '"'
+                    (* admite secuencias de escape \" \\ \n \r \t *)
+
+  RUNE_LIT      ::= "'" ( [^'\\] | "\\" [nrt\\'"] ) "'"
+
+  BOOLEANO      ::= "true" | "false"
+
+  NIL           ::= "nil"
+
+  Reglas de aplicación (maximal munch, orden de prioridad en el lexer):
+    1. FLOTANTE se evalúa ANTES que ENTERO, para que "3.14" no se
+       fragmente en ENTERO("3") + PUNTO(".") + ENTERO("14").
+    2. Las palabras reservadas (sección 4.4) se evalúan ANTES que ID,
+       para que "if" no se reconozca como un identificador genérico.
+
+4.3 — Funciones embebidas (tokens compuestos)
+──────────────────────────────────────────────────────────────────────────────
+
+  Estos cuatro lexemas se reconocen como UNIDADES LÉXICAS COMPLETAS,
+  evaluadas con prioridad sobre la regla de ID, ya que contienen un
+  carácter "." que de otra forma el lexer tokenizaría por separado:
+
+  FMT_PRINTLN         ::= "fmt.Println"
+  STRCONV_ATOI        ::= "strconv.Atoi"
+  STRCONV_PARSEFLOAT  ::= "strconv.ParseFloat"
+  REFLECT_TYPEOF      ::= "reflect.TypeOf"
+
+4.4 — Palabras reservadas (case-sensitive)
+──────────────────────────────────────────────────────────────────────────────
+
+  VAR        ::= "var"          BREAK      ::= "break"
+  FUNC       ::= "func"         CONTINUE   ::= "continue"
+  IF         ::= "if"           RETURN     ::= "return"     (* reservado Fase 2 *)
+  ELSE       ::= "else"         RANGE      ::= "range"       (* reservado Fase 2 *)
+  FOR        ::= "for"          STRUCT     ::= "struct"      (* reservado Fase 2 *)
+  SWITCH     ::= "switch"       (* reservado Fase 2 *)
+  CASE       ::= "case"         (* reservado Fase 2 *)
+  DEFAULT    ::= "default"      (* reservado Fase 2 *)
+
+  Tipos primitivos (también reservados):
+  TIPO_INT     ::= "int"
+  TIPO_FLOAT64 ::= "float64"
+  TIPO_STRING  ::= "string"
+  TIPO_BOOL    ::= "bool"
+  TIPO_RUNE    ::= "rune"
+
+4.5 — Operadores
+──────────────────────────────────────────────────────────────────────────────
+
+  Aritméticos:           SUMA "+"   RESTA "-"   MULT "*"   DIV "/"   MOD "%"
+
+  Asignación:            ASIGNACION  "="    ASIGN_CORTO  ":="
+                         ASIGN_SUMA  "+="   ASIGN_RESTA  "-="
+
+  Comparación:           IGUAL "=="   DIFERENTE "!="
+                         MENOR "<"    MAYOR ">"
+                         MENOR_IGUAL "<="    MAYOR_IGUAL ">="
+
+  Lógicos:               AND "&&"   OR "||"   NOT "!"
+
+  Incremento/decremento: INCREMENTO "++"   DECREMENTO "--"
+
+  Regla de tokenización: todos los operadores de DOS caracteres
+  ( := += -= == != <= >= && || ++ -- ) se evalúan ANTES que sus
+  prefijos de UN carácter ( = + - < > ), de modo que "==" nunca se
+  fragmente en dos tokens "=" "=".
+
+4.6 — Delimitadores
+──────────────────────────────────────────────────────────────────────────────
+
+  PAREN_ABRE "("        PAREN_CIERRA ")"
+  LLAVE_ABRE "{"        LLAVE_CIERRA "}"
+  CORCHETE_ABRE "["     CORCHETE_CIERRA "]"     (* reservados Fase 2: slices *)
+  PUNTO_COMA ";"        DOS_PUNTOS ":"
+  COMA ","              PUNTO "."
+
+4.7 — Comentarios (no generan token; se descartan en el lexer)
+──────────────────────────────────────────────────────────────────────────────
+
+  ComLinea   ::= "//" [^\n]*
+  ComBloque  ::= "/*" ( [^*] | "*" [^/] )* "*/"
+
+4.8 — Carácter no reconocido (recuperación de errores léxicos)
+──────────────────────────────────────────────────────────────────────────────
+
+  Cualquier carácter que no haga match con ninguna regla anterior:
+
+    [^]   →  se reporta como ERROR LÉXICO (línea, columna, lexema)
+              y el analizador continúa leyendo el resto del archivo
+              sin abortar el proceso de compilación.
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. TABLA DE PRECEDENCIA Y ASOCIATIVIDAD
+────────────────────────────────────────────────────────────────────────────────
+
+  Declarada en Parser.cup mediante las cláusulas "precedence". Se lista
+  de MENOR a MAYOR precedencia (igual que el orden de declaración en CUP,
+  donde la última línea declarada tiene la mayor prioridad de reducción):
+
+  ┌────────┬────────────────────────────────┬──────────────────┐
+  │ Nivel  │ Operador(es)                   │ Asociatividad     │
+  ├────────┼────────────────────────────────┼──────────────────┤
+  │   1    │  ||                            │  izquierda        │
+  │   2    │  &&                            │  izquierda        │
+  │   3    │  ==   !=                       │  izquierda        │
+  │   4    │  <   <=   >=   >               │  izquierda        │
+  │   5    │  +   -                         │  izquierda        │
+  │   6    │  *   /   %                     │  izquierda        │
+  │   7    │  !   -(unario)  [%prec UMINUS] │  derecha          │
+  │   8    │  (   )   [   ]                 │  izquierda        │
+  └────────┴────────────────────────────────┴──────────────────┘
+
+  El nivel 8 (mayor precedencia) corresponde a paréntesis de agrupación
+  y corchetes de indexación; en la gramática sintáctica esto se logra
+  estructuralmente al ubicar "(" <expresion> ")" dentro de <primario>,
+  el nivel más profundo y de evaluación más temprana del árbol.
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. ELIMINACIÓN DE AMBIGÜEDAD Y RECURSIÓN IZQUIERDA
+────────────────────────────────────────────────────────────────────────────────
+
+6.1 — Recursión izquierda intencional (LALR la admite, top-down no)
+──────────────────────────────────────────────────────────────────────────────
+
+  CUP genera un parser LALR(1) ascendente, por lo que la recursión
+  izquierda en reglas como:
+
+      <expresion_suma> ::= <expresion_suma> "+" <expresion_mult>
+                          | <expresion_mult>
+
+  es válida y preferida — produce asociatividad izquierda de forma
+  natural sin necesidad de reescritura, a diferencia de un parser
+  descendente LL(1) donde esta misma regla causaría recursión infinita
+  y requeriría refactorización a la forma:
+
+      <expresion_suma>       ::= <expresion_mult> <expresion_suma_resto>
+      <expresion_suma_resto> ::= "+" <expresion_mult> <expresion_suma_resto>
+                                | "-" <expresion_mult> <expresion_suma_resto>
+                                | ε
+
+  Esta gramática SÍ usa recursión izquierda directa porque está diseñada
+  específicamente para LALR(1) vía CUP, tal como lo exige el proyecto.
+
+6.2 — Ambigüedad dangling-else, resuelta por construcción gramatical
+──────────────────────────────────────────────────────────────────────────────
+
+  El clásico problema "dangling else" (a qué "if" pertenece un "else"
+  en una cadena de ifs anidados sin llaves) NO ocurre en esta gramática
+  porque <bloque> exige obligatoriamente "{" <sentencias> "}" — cada
+  rama if/else está siempre delimitada por llaves explícitas, eliminando
+  la ambigüedad en el nivel gramatical sin necesidad de reglas de
+  desambiguación adicionales (%prec) para el "else".
+
+6.3 — Cadenas "else if" mediante recursión sobre el propio no terminal
+──────────────────────────────────────────────────────────────────────────────
+
+  La producción:
+
+      <sentencia_if> ::= "if" <expresion> <bloque> "else" <sentencia_if>
+
+  permite que el AST anide tantos "else if" como aparezcan en el código
+  fuente, ya que cada "else" puede ir seguido de otro <sentencia_if>
+  completo en lugar de solamente un <bloque>. Esto es lo que el archivo
+  Parser.cup construye como el campo "elseIf" de NodoIf.
+
+6.4 — Conflicto shift-reduce resuelto con %prec UMINUS
+──────────────────────────────────────────────────────────────────────────────
+
+  La regla:
+
+      <expresion_unaria> ::= "-" <expresion_unaria>
+
+  introduce un conflicto shift-reduce con el operador binario RESTA "-"
+  (ej. "5 - -3"). Se resuelve declarando una precedencia ficticia
+  UMINUS, más alta que la de RESTA en la tabla, y anotando la
+  producción con %prec UMINUS — esto fuerza a CUP a tratar el "-"
+  unario como de mayor precedencia que cualquier "-" binario,
+  garantizando que "-(-(10))" se asocie correctamente de derecha
+  a izquierda.
+
+6.5 — Ambigüedad léxica entre identificador y función embebida
+──────────────────────────────────────────────────────────────────────────────
+
+  Una entrada como "fmt.Println" podría, en teoría, tokenizarse de
+  varias formas distintas (ID "fmt" + PUNTO "." + ID "Println", o como
+  un solo token). El lexer GoLite resuelve esto declarando los cuatro
+  lexemas de función embebida (4.3) como reglas léxicas independientes
+  evaluadas ANTES que la regla genérica {Identificador}, aprovechando
+  que JFlex prioriza la regla declarada primero cuando dos reglas
+  generan un match de igual longitud (maximal munch con prioridad por
+  orden de declaración).
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. PALABRAS RESERVADAS — LISTA COMPLETA
+────────────────────────────────────────────────────────────────────────────────
+
+  No pueden usarse como identificador de variable, función o parámetro
+  (case-sensitive: "if" es palabra reservada, "If" no lo es):
+
+  var      func     if       else     for      switch    case
+  default  break    continue return   range    struct
+
+  int      float64  string   bool     rune
+
+  true     false    nil
+
+  Nota: "switch", "case", "default", "return", "range" y "struct" están
+  reservados léxicamente desde la Fase 1, pero sus reglas sintácticas de
+  uso (sección 3) se incorporan en la Fase 2 del proyecto.
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. RESUMEN — TOTAL DE PRODUCCIONES POR CATEGORÍA
+────────────────────────────────────────────────────────────────────────────────
+
+  Categoría                          No terminales   Producciones
+  ─────────────────────────────────  ──────────────  ─────────────
+  Programa / declaraciones globales        3               4
+  Funciones y parámetros                   4               7
+  Tipos                                    1               6
+  Bloques y sentencias                     3              10
+  Declaración de variables                 1               3
+  Asignación e incremento                  3               6
+  Control de flujo (if / for)              4              10
+  Transferencia (break / continue)         2               2
+  Llamadas y funciones embebidas           6              10
+  Expresiones (cascada de precedencia)     8              20
+  ─────────────────────────────────  ──────────────  ─────────────
+  TOTAL                                   35              78
+
+  35 no terminales · 78 producciones · 1 símbolo inicial (<programa>)
+  Verificado línea por línea contra src/parser/Parser.cup
+  y src/lexer/Lexer.jflex del proyecto GoLite Compiler — Fase  y 2

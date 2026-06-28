@@ -77,17 +77,30 @@ public class NodoFuncion extends Nodo {
 
     //  AST
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("Funcion: ").append(nombre);
-        if (tipoRetorno != null) sb.append(" -> ").append(tipoRetorno.getNombre());
-        sb.append("\n");
-
-        for (NodoParametro p : parametros) {
-            sb.append(p.toAST(nivel + 1));
-        }
-        sb.append(cuerpo.toAST(nivel + 1));
-        return sb.toString();
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("Funcion\n");
+    sb.append(indent(nivel + 1)).append("Nombre: ").append(nombre).append("\n");
+    
+    if (tipoRetorno != null) {
+        sb.append(indent(nivel + 1)).append("TipoRetorno: ").append(tipoRetorno.getNombre()).append("\n");
     }
+    
+    if (parametros != null && !parametros.isEmpty()) {
+        sb.append(indent(nivel + 1)).append("Parametros\n");
+        for (NodoParametro p : parametros) {
+            if (p != null) {
+                sb.append(p.toAST(nivel + 2));
+            }
+        }
+    }
+    
+    if (cuerpo != null) {
+        sb.append(indent(nivel + 1)).append("Cuerpo\n");
+        sb.append(cuerpo.toAST(nivel + 2));
+    }
+    
+    return sb.toString();
+}
 }

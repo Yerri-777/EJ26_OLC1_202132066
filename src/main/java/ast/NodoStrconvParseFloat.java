@@ -43,8 +43,12 @@ public class NodoStrconvParseFloat extends NodoExpresion {
         return "nil";
     }
 
-    @Override
-    public String toAST(int nivel) {
-        return indent(nivel) + "StrconvParseFloat\n" + argumento.toAST(nivel + 1);
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("StrconvParseFloat\n");
+    if (argumento != null) {
+        sb.append(argumento.toAST(nivel + 1));
     }
-}
+    return sb.toString();
+} }

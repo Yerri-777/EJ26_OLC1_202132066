@@ -3,7 +3,6 @@ package ast;
 import entorno.Entorno;
 import errores.ErrorManager;
 
-
 public class NodoIdentificador extends NodoExpresion {
 
     private final String nombre;
@@ -30,8 +29,24 @@ public class NodoIdentificador extends NodoExpresion {
         return val;
     }
 
+    // --- NUEVO MÉTODO IMPLEMENTADO ---
     @Override
-    public String toAST(int nivel) {
-        return indent(nivel) + "Identificador: " + nombre + "\n";
+    public void assign(Entorno entorno, Object valor) {
+        // Verificamos antes de asignar
+        if (entorno.obtener(nombre) == Entorno.NO_ENCONTRADO) {
+            ErrorManager.getInstance().agregarSemantico(
+                "La variable '" + nombre + "' no está declarada. No se puede asignar.",
+                linea, columna
+            );
+            return;
+        }
+        
+        // Ejecutamos la asignación en el entorno
+        entorno.asignar(nombre, valor);
     }
+
+    @Override
+public String toAST(int nivel) {
+    return indent(nivel) + "Identificador: " + nombre + "\n";
+}
 }

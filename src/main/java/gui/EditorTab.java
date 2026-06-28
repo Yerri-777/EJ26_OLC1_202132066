@@ -5,28 +5,27 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.*;
 import java.awt.*;
+import java.awt.geom.Rectangle2D;
 import java.io.File;
-
 
 public class EditorTab extends JPanel {
 
-    // Estado del archivo 
+    // ─── Estado del archivo ───
     private String nombre;
     private File   archivo;
     private boolean modificado = false;
 
-    // Componentes de UI 
-    private final JTextArea    areaTexto;
+    // ─── Componentes de UI ───
+    private final JTextArea areaTexto;
     private final LineNumberPanel numerosLinea;
 
-    
     public EditorTab(String nombre, File archivo) {
         this.nombre  = nombre;
         this.archivo = archivo;
 
         setLayout(new BorderLayout());
 
-        // Área de texto 
+        // Configuración del Área de texto 
         areaTexto = new JTextArea();
         areaTexto.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
         areaTexto.setTabSize(4);
@@ -43,10 +42,10 @@ public class EditorTab extends JPanel {
             @Override public void changedUpdate(DocumentEvent e) { marcarModificado(); }
         });
 
-        // Números de línea
+        // Panel lateral para los números de línea
         numerosLinea = new LineNumberPanel(areaTexto);
 
-        // ScrollPane
+        // Configuración del ScrollPane
         JScrollPane scroll = new JScrollPane(areaTexto);
         scroll.setRowHeaderView(numerosLinea);
         scroll.setBorder(BorderFactory.createEmptyBorder());
@@ -57,8 +56,8 @@ public class EditorTab extends JPanel {
 
     // ─── API pública ───────────────────────────────────────────────────────────
 
-    public String  getNombre()              { return nombre;     }
-    public File    getArchivo()             { return archivo;    }
+    public String  getNombre()              { return nombre; }
+    public File    getArchivo()             { return archivo; }
     public String  getContenido()           { return areaTexto.getText(); }
     public boolean tieneModificaciones()    { return modificado; }
 
@@ -83,9 +82,8 @@ public class EditorTab extends JPanel {
         }
     }
 
-    // ─── Panel interno de números de línea ─────────────────────────────────────
+    // ─── Panel interno de números de línea consolidado ─────────────────────────
 
- 
     private static class LineNumberPanel extends JPanel {
 
         private final JTextArea textArea;
@@ -93,56 +91,85 @@ public class EditorTab extends JPanel {
 
         LineNumberPanel(JTextArea textArea) {
             this.textArea = textArea;
-            setPreferredSize(new Dimension(ANCHO, 0));
             setBackground(new Color(37, 37, 38));
 
-            // Redibujar cuando el documento cambie
+            // Se actualiza el dibujo y tamaño cuando cambia el texto del documento
             textArea.getDocument().addDocumentListener(new DocumentListener() {
-                @Override public void insertUpdate(DocumentEvent e)  { repaint(); }
-                @Override public void removeUpdate(DocumentEvent e)  { repaint(); }
-                @Override public void changedUpdate(DocumentEvent e) { repaint(); }
+                @Override public void insertUpdate(DocumentEvent e)  { actualizar(); }
+                @Override public void removeUpdate(DocumentEvent e)  { actualizar(); }
+                @Override public void changedUpdate(DocumentEvent e) { actualizar(); }
             });
+
+            // Se actualiza cuando cambia el scroll o se mueve el cursor (Para repintar la línea actual)
+            textArea.addCaretListener(e -> repaint());
+        }
+
+        // Le avisa al JScrollPane que el tamaño cambió
+        private void actualizar() {
+            revalidate();
+            repaint();
+        }
+
+        // El panel de números siempre tendrá el mismo alto que el área de texto
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(ANCHO, textArea.getHeight());
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-                                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            
+            // Antialiasing para suavizar el texto
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
             FontMetrics fm = textArea.getFontMetrics(textArea.getFont());
             g2.setFont(textArea.getFont());
-            g2.setColor(new Color(133, 133, 133));
+            int fontAscent = fm.getAscent();
 
-            int alturaLinea = fm.getHeight();
-            int totalLineas = textArea.getLineCount();
-
-            // Calcular el offset de scroll
-            Rectangle clip = g2.getClipBounds();
-            int inicioLinea = clip.y / alturaLinea;
-            int finLinea    = Math.min(totalLineas, (clip.y + clip.height) / alturaLinea + 1);
-
-            // Número de línea actual (resaltado)
+            // Identificar el número de línea actual donde está el cursor
             int lineaActual = 0;
             try {
                 int caretPos = textArea.getCaretPosition();
                 lineaActual  = textArea.getLineOfOffset(caretPos) + 1;
             } catch (Exception ignored) {}
 
-            for (int i = inicioLinea; i < finLinea; i++) {
-                int linea = i + 1;
-                int y = i * alturaLinea + fm.getAscent() + textArea.getInsets().top;
+            // Obtener el área visible para no procesar código que no se ve
+            Rectangle clip = g.getClipBounds();
+            if (clip == null) return;
 
-                if (linea == lineaActual) {
-                    g2.setColor(new Color(200, 200, 200));  
-                } else {
-                    g2.setColor(new Color(133, 133, 133));
+            try {
+                // Calcular solo la primera y última línea visibles
+                int startOffset = textArea.viewToModel2D(new java.awt.geom.Point2D.Double(0, clip.y));
+                int endOffset = textArea.viewToModel2D(new java.awt.geom.Point2D.Double(0, clip.y + clip.height));
+
+                int startLine = textArea.getLineOfOffset(startOffset);
+                int endLine = textArea.getLineOfOffset(endOffset);
+
+                // Dibujar únicamente las líneas que están en pantalla
+                for (int i = startLine; i <= endLine; i++) {
+                    Rectangle2D rect = textArea.modelToView2D(textArea.getLineStartOffset(i));
+                    
+                    if (rect != null) {
+                        int y = (int) rect.getY() + fontAscent;
+                        int linea = i + 1;
+                        
+                        // Resaltar el color si es la línea en la que se encuentra el cursor
+                        if (linea == lineaActual) {
+                            g2.setColor(new Color(200, 200, 200));  
+                        } else {
+                            g2.setColor(new Color(133, 133, 133));
+                        }
+
+                        // Alinear el texto hacia la derecha
+                        String numStr = String.valueOf(linea);
+                        int x = ANCHO - fm.stringWidth(numStr) - 6;
+                        g2.drawString(numStr, x, y);
+                    }
                 }
-
-                String numStr = String.valueOf(linea);
-                int x = ANCHO - fm.stringWidth(numStr) - 6;
-                g2.drawString(numStr, x, y);
+            } catch (Exception e) {
+                // Silenciamos las excepciones gráficas internas si el componente aún no está renderizado
             }
         }
     }

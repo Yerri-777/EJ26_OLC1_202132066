@@ -56,15 +56,16 @@ public class NodoPrograma extends Nodo {
         return null;
     }
 
-    @Override
-    public String toAST(int nivel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent(nivel)).append("Programa\n");
+   @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("Programa\n");
+    if (declaraciones != null) {
         for (Nodo d : declaraciones) {
             if (d != null) {
                 sb.append(d.toAST(nivel + 1));
             }
         }
-        return sb.toString();
     }
-}
+    return sb.toString();
+} }

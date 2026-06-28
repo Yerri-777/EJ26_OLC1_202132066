@@ -18,8 +18,12 @@ public class NodoExpresionSentencia extends NodoSentencia {
         return null;
     }
 
-    @Override
-    public String toAST(int nivel) {
-        return indent(nivel) + "ExprSentencia:\n" + expresion.toAST(nivel + 1);
+  @Override
+public String toAST(int nivel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(indent(nivel)).append("ExprSentencia\n");
+    if (expresion != null) {
+        sb.append(expresion.toAST(nivel + 1));
     }
-}
+    return sb.toString();
+} }

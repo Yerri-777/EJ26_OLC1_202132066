@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             http://www.apache.org/xsd/maven-4.0.0.xsd">
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -18,102 +18,173 @@
     </properties>
 
     <dependencies>
+
+        <!-- Runtime de Java CUP -->
         <dependency>
             <groupId>com.github.vbmacher</groupId>
             <artifactId>java-cup-runtime</artifactId>
             <version>11b-20160615</version>
         </dependency>
+
     </dependencies>
 
     <build>
+
+        <!-- Nombre final del JAR -->
+        <finalName>GoLiteCompiler</finalName>
+
         <plugins>
+
+            <!-- ===================================================== -->
+            <!-- COMPILADOR JAVA -->
+            <!-- ===================================================== -->
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
+
                 <configuration>
                     <release>21</release>
+                    <encoding>UTF-8</encoding>
                 </configuration>
+
             </plugin>
 
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.4.1</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <addClasspath>true</addClasspath>
-                            <mainClass>compilador.Main</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
+            <!-- ===================================================== -->
+            <!-- GENERAR LEXER -->
+            <!-- ===================================================== -->
 
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.7.1</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>compilador.Main</mainClass>
-                        </manifest>
-                    </archive>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
 
-            <plugin>
                 <groupId>de.jflex</groupId>
                 <artifactId>jflex-maven-plugin</artifactId>
                 <version>1.9.1</version>
+
                 <executions>
+
                     <execution>
+
                         <goals>
                             <goal>generate</goal>
                         </goals>
+
                         <configuration>
+
                             <outputDirectory>src/main/java</outputDirectory>
+
                             <lexDefinitions>
                                 <lexDefinition>src/main/jflex/Lexer.jflex</lexDefinition>
                             </lexDefinitions>
+
                         </configuration>
+
                     </execution>
+
                 </executions>
+
             </plugin>
 
+            <!-- ===================================================== -->
+            <!-- GENERAR PARSER CUP -->
+            <!-- ===================================================== -->
+
             <plugin>
+
                 <groupId>com.github.vbmacher</groupId>
                 <artifactId>cup-maven-plugin</artifactId>
                 <version>11b-20160615</version>
+
                 <executions>
+
                     <execution>
+
                         <goals>
                             <goal>generate</goal>
                         </goals>
+
                         <configuration>
+
                             <outputDirectory>src/main/java</outputDirectory>
-                            <cupDefinition>src/main/cup/Parser.cup</cupDefinition>
+
+                            <cupDefinition>
+                                src/main/cup/Parser.cup
+                            </cupDefinition>
+
                             <className>Parser</className>
+
                             <symbolsName>sym</symbolsName>
+
+                            <!--
+                            Conflictos shift/reduce esperados por la
+                            gramática de GoLite.
+                            -->
+
+                            <expectedConflicts>5</expectedConflicts>
+
                         </configuration>
+
                     </execution>
+
                 </executions>
+
+            </plugin>
+
+            <!-- ===================================================== -->
+            <!-- FAT JAR -->
+            <!-- ===================================================== -->
+
+            <plugin>
+
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.7.1</version>
+
+                <configuration>
+
+                    <!-- No agregar "-jar-with-dependencies" -->
+                    <appendAssemblyId>false</appendAssemblyId>
+
+                    <archive>
+
+                        <manifest>
+
+                            <mainClass>compilador.Main</mainClass>
+
+                        </manifest>
+
+                    </archive>
+
+                    <descriptorRefs>
+
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+
+                    </descriptorRefs>
+
+                </configuration>
+
+                <executions>
+
+                    <execution>
+
+                        <id>make-assembly</id>
+
+                        <phase>package</phase>
+
+                        <goals>
+
+                            <goal>single</goal>
+
+                        </goals>
+
+                    </execution>
+
+                </executions>
+
             </plugin>
 
         </plugins>
+
     </build>
 
 </project>
