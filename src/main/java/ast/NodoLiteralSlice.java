@@ -13,10 +13,6 @@ public class NodoLiteralSlice extends NodoExpresion {
         this.elementos = elementos;
     }
 
-    /**
-     * Al ser un NodoExpresion, este método debe retornar el valor resultante.
-     * En este caso, retorna la lista de valores ya evaluados.
-     */
     @Override
     public Object execute(Entorno entorno) {
         return getValue(entorno);
@@ -33,8 +29,7 @@ public class NodoLiteralSlice extends NodoExpresion {
             listaValores.add(valor);
         }
         
-        // Retornamos la estructura poblada. 
-        // Nota: En tu entorno, el tipo del objeto retornado será tu clase 'Slice' o 'ArrayList'
+        
         return listaValores;
     }
 

@@ -30,16 +30,13 @@ public class NodoLen extends NodoExpresion {
             return ((List<?>) val).size();
         }
 
-        // 2. ERROR SEMÁNTICO: Si llega aquí, es porque el tipo no es válido
-        // Ya no devolvemos 0. Lanzamos un error o notificamos al sistema.
+
         String tipoRecibido = (val != null) ? val.getClass().getSimpleName() : "null";
         String mensaje = "Error semántico en línea " + this.linea + ", columna " + this.columna + 
                          ": La función 'len()' no puede aplicarse a un tipo '" + tipoRecibido + "'.";
+       
         
-        // Aquí deberías integrar con tu manejador de errores global
-        // Ejemplo: ManejadorErrores.getInstance().agregar(mensaje);
-        
-        throw new RuntimeException(mensaje); // Detenemos la ejecución para no propagar datos erróneos
+        throw new RuntimeException(mensaje); 
     }
 
     @Override

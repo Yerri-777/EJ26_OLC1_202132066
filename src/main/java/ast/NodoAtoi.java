@@ -3,9 +3,7 @@ package ast;
 import entorno.Entorno;
 import errores.ErrorManager;
 
-/**
- * Función embebida: strconv.Atoi(cadena)
- */
+
 public class NodoAtoi { 
     
     private final Object expresion;

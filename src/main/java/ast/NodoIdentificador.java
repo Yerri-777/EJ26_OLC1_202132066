@@ -29,7 +29,7 @@ public class NodoIdentificador extends NodoExpresion {
         return val;
     }
 
-    // --- NUEVO MÉTODO IMPLEMENTADO ---
+   
     @Override
     public void assign(Entorno entorno, Object valor) {
         // Verificamos antes de asignar

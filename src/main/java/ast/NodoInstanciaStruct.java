@@ -5,9 +5,7 @@ import excepciones.ErrorSemanticoException;
 import java.util.HashMap;
 import java.util.List;
 
-/**
- * Representa la instanciación de un Struct: Nombre{val1, val2...}
- */
+
 public class NodoInstanciaStruct extends NodoExpresion {
 
     private final String nombreStruct;
@@ -20,14 +18,13 @@ public class NodoInstanciaStruct extends NodoExpresion {
     }
 
     public String getTipo(Entorno entorno) {
-        // En un futuro podrías verificar si el struct existe, pero
-        // por ahora devolvemos el nombre que define el tipo.
+     
         return nombreStruct;
     }
 
     @Override
     public Object execute(Entorno entorno) {
-        // Buscamos la definición del struct
+ 
         NodoStruct def = entorno.buscarStruct(nombreStruct);
 
         if (def == null) {
@@ -38,7 +35,7 @@ public class NodoInstanciaStruct extends NodoExpresion {
             );
         }
 
-        // Crear un mapa que represente la instancia (Campo -> Valor)
+        // Crear un mapa que represente la instancia 
         HashMap<String, Object> instancia = new HashMap<>();
         List<NodoParametro> campos = def.getCampos();
 
@@ -63,11 +60,7 @@ public class NodoInstanciaStruct extends NodoExpresion {
         return instancia;
     }
 
-    /**
-     * IMPORTANTE: Aquí estaba el error.
-     * Al ser una expresión, cuando el compilador necesite el valor de este nodo,
-     * simplemente ejecutamos la lógica de creación del struct.
-     */
+    
     @Override
     public Object getValue(Entorno entorno) {
         return this.execute(entorno);

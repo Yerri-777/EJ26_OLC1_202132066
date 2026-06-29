@@ -40,7 +40,7 @@ public class NodoAccesoStruct extends NodoExpresion {
         Object obj = objeto.execute(entorno);
         
         if (esArray) {
-            // LÓGICA PARA ARRAYS (SLICES) COMPLETA
+            // LÓGICA PARA ARRAYS 
             if (obj instanceof List) {
                 Object idxObj = expresion.getValue(entorno);
                 if (!(idxObj instanceof Integer)) {
@@ -85,14 +85,14 @@ public class NodoAccesoStruct extends NodoExpresion {
                 if (idx < 0 || idx >= lista.size()) {
                     throw new ErrorSemanticoException("Índice fuera de límites al asignar: " + idx, linea, columna);
                 }
-                lista.set(idx, valor); // Actualiza la memoria real
+                lista.set(idx, valor); 
             } else {
                 throw new ErrorSemanticoException("El objeto no es un arreglo (slice).", linea, columna);
             }
         } else {
             // ASIGNACIÓN PARA STRUCTS
             if (obj instanceof HashMap) {
-                ((HashMap<String, Object>) obj).put(campo, valor); // Actualiza la memoria real
+                ((HashMap<String, Object>) obj).put(campo, valor); 
             } else {
                 throw new ErrorSemanticoException("Error: El objeto no es un Struct válido.", linea, columna);
             }

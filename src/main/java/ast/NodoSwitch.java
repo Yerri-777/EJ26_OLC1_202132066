@@ -11,7 +11,7 @@ public class NodoSwitch extends Nodo {
     private Nodo expresion;      // Puede ser null
     private List<Nodo> casos;
 
-    // CONSTRUCTOR CORREGIDO
+
     public NodoSwitch(Nodo inicializacion, Nodo expresion, List<Nodo> casos, int linea, int columna) {
         super(linea, columna);
         this.inicializacion = inicializacion;
@@ -41,7 +41,7 @@ public class NodoSwitch extends Nodo {
 
             if (!esDefault && expresion != null) {
                 Object valorCase = ((NodoExpresion) c.getCondicion()).getValue(entornoSwitch);
-                // Asegúrate de que valorSwitch no sea null antes de comparar
+              
                 if (valorSwitch != null && valorSwitch.equals(valorCase)) {
                     coincide = true;
                 }

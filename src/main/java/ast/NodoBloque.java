@@ -9,7 +9,7 @@ public class NodoBloque extends NodoSentencia {
 
     public NodoBloque(List<Nodo> sentencias, int linea, int columna) {
         super(linea, columna);
-        // Evitamos nulos, si viene vacío dejamos una lista vacía
+   
         this.sentencias = sentencias;
     }
 

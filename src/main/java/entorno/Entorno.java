@@ -10,9 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Entorno — Tabla de símbolos encadenada y gestor de funciones, structs y funciones nativas.
- */
 public class Entorno {
 
     // Centinela para no encontrado

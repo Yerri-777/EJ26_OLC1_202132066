@@ -21,8 +21,7 @@ public class NodoBinario extends NodoExpresion {
 
     @Override
     public Object execute(Entorno entorno) {
-        // CAMBIO CRÍTICO: Llamar a execute() de los hijos, NO a getValue()
-        // Si un hijo retorna null, lo atrapamos aquí mismo.
+     
         Object izq = izquierdo.execute(entorno);
         Object der = derecho.execute(entorno);
 

@@ -1,9 +1,8 @@
 package ast;
 
 import entorno.Entorno;
-import entorno.Simbolo; // Asegúrate de importar tu clase Simbolo
-import excepciones.ErrorSemanticoException; // Asegúrate de importar tu clase de error
-
+import entorno.Simbolo; 
+import excepciones.ErrorSemanticoException; 
 public class NodoAsignacion extends NodoSentencia {
 
     private final Nodo target;
@@ -27,7 +26,7 @@ public class NodoAsignacion extends NodoSentencia {
                 Simbolo simbolo = entorno.buscar(nombreVar);
 
                 if (simbolo != null) {
-                    String tipoDeclarado = simbolo.getTipoDato(); // <--- Usa el método que ya existe en tu clase Simbolo
+                    String tipoDeclarado = simbolo.getTipoDato(); 
                     
                     // Verificamos compatibilidad
                     if (!esTipoCompatible(tipoDeclarado, nuevoValor)) {
@@ -52,14 +51,14 @@ public class NodoAsignacion extends NodoSentencia {
         if (tipoDeclarado.equalsIgnoreCase("string")) return valor instanceof String;
         if (tipoDeclarado.equalsIgnoreCase("float")) return valor instanceof Double || valor instanceof Float;
         if (tipoDeclarado.equalsIgnoreCase("bool")) return valor instanceof Boolean;
-        return true; // Por defecto dejamos pasar si no logramos determinar el tipo
+        return true; 
     }
 
   @Override
 public String toAST(int nivel) {
     StringBuilder sb = new StringBuilder();
     sb.append(indent(nivel)).append("Asignacion\n");
-    // Agregamos el símbolo del operador de asignación
+
     sb.append(indent(nivel + 1)).append("Operador: =\n");
     if (target != null) sb.append(target.toAST(nivel + 1));
     if (expresion != null) sb.append(expresion.toAST(nivel + 1));

@@ -4,9 +4,7 @@ import entorno.Entorno;
 import excepciones.ContinueException;
 
 
- // Lanza ContinueException que solo NodoFor puede capturar
- //Si se usa fuera de un for  error semántico
- 
+
 public class NodoContinue extends NodoSentencia {
 
     public NodoContinue(int linea, int columna) {

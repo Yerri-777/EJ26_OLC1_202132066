@@ -20,7 +20,7 @@ public class NodoAccesoSlice extends Nodo {
 @Override
 public String toAST(int nivel) {
     StringBuilder sb = new StringBuilder();
-    // Reemplaza 'this.nombre' por el atributo que guarda el nombre del slice/variable
+   
     sb.append(indent(nivel)).append("AccesoSlice: ").append(this.toAST(nivel)).append("\n");
     if (slice != null) sb.append(slice.toAST(nivel + 1));
     if (indice != null) sb.append(indice.toAST(nivel + 1));

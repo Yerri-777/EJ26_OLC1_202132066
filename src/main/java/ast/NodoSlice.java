@@ -24,7 +24,7 @@ public class NodoSlice extends NodoExpresion {
         return lista;
     }
 
-    // NodoExpresion suele requerir getValue
+
     @Override
     public Object getValue(Entorno entorno) {
         return execute(entorno);

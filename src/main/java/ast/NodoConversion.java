@@ -2,9 +2,6 @@ package ast;
 
 import entorno.Entorno;
 
-/**
- * Nodo para representar conversiones de tipo explícitas (casting)
- */
 public class NodoConversion extends NodoExpresion {
     private String tipoDestino;
     private NodoExpresion expresion;
@@ -23,14 +20,11 @@ public class NodoConversion extends NodoExpresion {
         return expresion;
     }
     
-    // Si tus otros nodos tienen un método como 'ejecutar', 'evaluar' o 'getTipo',
-    // agrégalo aquí siguiendo el mismo patrón, por ejemplo:
-    // @Override
-    // public Object ejecutar(Entorno e) { ... }
+   
 
     @Override
     public Object getValue(Entorno entorno) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        throw new UnsupportedOperationException("Not supported yet."); 
     }
 
 @Override

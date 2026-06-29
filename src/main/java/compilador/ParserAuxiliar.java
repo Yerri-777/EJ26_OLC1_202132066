@@ -1,10 +1,4 @@
-// =====================================================================
-// compilador/ParserAuxiliar.java — VERSIÓN FINAL COMPLETA
-// Soporta: for clásico, for range, slices con índice dinámico,
-//          slices 2D, métodos de struct, funciones de usuario con return,
-//          break solo-de-switch, recursión, append, len, slices.Index,
-//          strings.Join, operador módulo %, operadores <= >= !=
-// =====================================================================
+
 package compilador;
 
 import ast.*;
@@ -24,30 +18,35 @@ public class ParserAuxiliar {
     private Entorno entorno;
     private List<Nodo> nodosGenerados;
     private String ultimoError = null;
-
-    // Almacén de funciones de usuario definidas en el script
-    // clave: "nombreFunc" o "TipoReceptor.nombreMetodo"
+    private int profundidadAST = 0;
+private StringBuilder textoAST = new StringBuilder();
+public String getTextoAST() { return textoAST.toString(); }
+  
     private Map<String, FuncionUsuario> funcionesUsuario = new HashMap<>();
 
     public String getUltimoError() { return this.ultimoError; }
 
-    // ─── Clase interna para guardar funciones de usuario ─────────────
+
     private static class FuncionUsuario {
         String nombre;
-        String receptor;          // null si función normal; "Punto" si es método
-        List<String> paramNombres;
-        List<String> paramTipos;
-        String tipoRetorno;       // "void" si no retorna nada
-        int tokenInicio;          // índice en tokens[] donde empieza el cuerpo (tras '{')
+        String tipoReceptor    = null;  
+        String nombreReceptor  = null;   
+        List<String> paramNombres = new ArrayList<>();
+        List<String> paramTipos   = new ArrayList<>();
+        String tipoRetorno    = "void";
+        int tokenInicio;                
     }
+private void agregarNodoAST(String etiqueta) {
+    for (int i = 0; i < profundidadAST; i++) textoAST.append("  ");
+    textoAST.append(etiqueta).append("\n");
+}
 
-    // ─── Excepción return ─────────────────────────────────────────────
     public class ReturnException extends RuntimeException {
         public Object valor;
-        public ReturnException(Object valor) { this.valor = valor; }
+        public ReturnException(Object v) { this.valor = v; }
     }
 
-    // ─── Excepción break (sale solo del switch o del for) ────────────
+  
     public static class BreakException extends RuntimeException {
         public BreakException() { super(null, null, true, false); }
     }
@@ -61,649 +60,595 @@ public class ParserAuxiliar {
 
     public List<Nodo> getNodosGenerados() { return this.nodosGenerados; }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  PUNTO DE ENTRADA
-    // ═════════════════════════════════════════════════════════════════
-    public void ejecutar() {
-        // PASE 1: registrar todas las funciones/métodos sin ejecutarlos
-        registrarFuncionesGlobales();
 
-        // PASE 2: buscar y ejecutar main()
+    public void ejecutar() {
+        // PASE 1: registrar structs y funciones
+        pc = 0;
+        registrarGlobales();
+
+        // PASE 2: ejecutar main()
         pc = 0;
         try {
             while (pc < tokens.size()) {
-                if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) { consume(); continue; }
                 Token t = peek();
                 if (t == null) break;
-                if (t.getTipo() == TipoToken.RES_FUNC) {
-                    // Saltamos definiciones de función en el nivel global
-                    saltarDefinicionFunc();
-                } else if (t.getTipo() == TipoToken.RES_TYPE) {
-                    saltarDefinicionStruct();
-                } else if (t.getTipo() == TipoToken.IDENTIFICADOR
-                        && pc + 1 < tokens.size()
-                        && tokens.get(pc + 1).getTipo() == TipoToken.LLAVE_ABRE) {
-                    // struct sin 'type' keyword (struct Nombre {)
-                    saltarDefinicionStruct();
+                if (t.getTipo() == PUNTO_COMA) { consume(); continue; }
+
+                if (t.getTipo() == RES_FUNC) {
+                    // Solo ejecutamos main, el resto se salta
+                    int saved = pc;
+                    consume(); 
+                    
+                    if (esToken(PAREN_ABRE)) {
+                        consume(); saltarHastaToken(PAREN_CIERRA); consume();
+                    }
+                    String nombre = peek() != null ? peek().getLexema() : "";
+                    if ("main".equals(nombre)) {
+                        pc = saved; 
+                        procesarSentencia(peek());
+                    } else {
+                        pc = saved;
+                        saltarDefFunc();
+                    }
+                } else if (t.getTipo() == RES_TYPE) {
+                    saltarDefStruct();
+                } else if (t.getTipo() == IDENTIFICADOR
+                        && esStructSinType()) {
+                    saltarDefStructSinType();
                 } else {
                     procesarSentencia(t);
                 }
             }
         } catch (ReturnException e) {
-            // return de main, normal
+            // return desde main — normal
         } catch (Exception e) {
-            this.ultimoError = "Error en posición " + pc + ": " + e.getMessage();
-            System.err.println("[ParserAuxiliar] Error: " + e.getMessage());
+            this.ultimoError = "Error en pos " + pc + ": " + e.getMessage();
+            System.err.println("[ParserAuxiliar] " + this.ultimoError);
             e.printStackTrace();
         }
     }
 
-    // ─── Pase 1: registrar funciones globales ────────────────────────
-    private void registrarFuncionesGlobales() {
-        int savedPc = pc;
-        pc = 0;
+
+    private boolean esStructSinType() {
+        if (pc + 1 >= tokens.size()) return false;
+        return tokens.get(pc + 1).getTipo() == LLAVE_ABRE;
+    }
+
+    private void registrarGlobales() {
         while (pc < tokens.size()) {
             Token t = peek();
             if (t == null) break;
-            if (t.getTipo() == TipoToken.PUNTO_COMA) { consume(); continue; }
-            if (t.getTipo() == TipoToken.RES_FUNC) {
-                registrarFunc();
-            } else if (t.getTipo() == TipoToken.RES_TYPE) {
-                registrarStruct();
-            } else if (t.getTipo() == TipoToken.IDENTIFICADOR
-                    && pc + 1 < tokens.size()
-                    && tokens.get(pc + 1).getTipo() == TipoToken.LLAVE_ABRE) {
-                registrarStruct();
-            } else {
-                consume(); // saltar lo demás en pase 1
+            if (t.getTipo() == PUNTO_COMA) { consume(); continue; }
+
+            if (t.getTipo() == RES_TYPE)  { registrarStruct(true);  continue; }
+            if (t.getTipo() == RES_FUNC)  { registrarFunc();         continue; }
+            // struct sin keyword 'type': Nombre { campos }
+            if (t.getTipo() == IDENTIFICADOR && esStructSinType()) {
+                registrarStruct(false); continue;
             }
+            consume();
         }
-        pc = savedPc;
     }
 
-    private void registrarStruct() {
-        // type NombreStruct struct { campos }
-        // o bien: NombreStruct { campos }  (sin type)
-        if (peek() != null && peek().getTipo() == TipoToken.RES_TYPE) consume(); // 'type'
-        String nombre = consume().getLexema(); // nombre struct
-        // puede venir 'struct' keyword
-        if (peek() != null && peek().getLexema().equals("struct")) consume();
-        if (!esToken(TipoToken.LLAVE_ABRE)) return;
+
+    private void registrarStruct(boolean tieneType) {
+        if (tieneType) consume(); 
+        if (peek() == null) return;
+        String nombre = consume().getLexema();
+        // keyword 'struct' opcional
+        if (peek() != null && "struct".equals(peek().getLexema())) consume();
+        if (!esToken(LLAVE_ABRE)) return;
         consume(); // '{'
         Map<String, String> campos = new HashMap<>();
-        while (peek() != null && peek().getTipo() != TipoToken.LLAVE_CIERRA) {
-            if (peek().getTipo() == TipoToken.PUNTO_COMA) { consume(); continue; }
-            if (peek().getTipo() == TipoToken.IDENTIFICADOR) {
-                String nombreCampo = consume().getLexema();
+        while (peek() != null && !esToken(LLAVE_CIERRA)) {
+            if (esToken(PUNTO_COMA)) { consume(); continue; }
+            if (esToken(IDENTIFICADOR)) {
+                String nc = consume().getLexema();
                 if (peek() == null) break;
-                String tipoCampo = consume().getLexema();
-                // tipo puede ser []int etc
-                while (peek() != null && peek().getTipo() == TipoToken.COR_ABRE) {
-                    tipoCampo += consume().getLexema();
-                    if (peek() != null && peek().getTipo() == TipoToken.COR_CIERRA)
-                        tipoCampo += consume().getLexema();
+                String tc = consume().getLexema();
+                // tipo puede ser []int, etc.
+                while (esToken(COR_ABRE)) {
+                    tc += consume().getLexema();
+                    if (esToken(COR_CIERRA)) tc += consume().getLexema();
                 }
-                campos.put(nombreCampo, tipoCampo);
-            } else {
-                consume();
-            }
+                campos.put(nc, tc);
+            } else { consume(); }
         }
-        if (peek() != null) consume(); // '}'
-        entorno.registrarStruct(nombre, new ast.NodoStruct(campos));
-        this.nodosGenerados.add(new ast.NodoStruct(campos));
+        if (esToken(LLAVE_CIERRA)) consume();
+        ast.NodoStruct ns = new ast.NodoStruct(campos);
+        entorno.registrarStruct(nombre, ns);
+        this.nodosGenerados.add(ns);
     }
 
+    // ── Registrar función o método ───────────────────────────────────
     private void registrarFunc() {
         consume(); // 'func'
         if (peek() == null) return;
 
         FuncionUsuario fu = new FuncionUsuario();
-        fu.paramNombres = new ArrayList<>();
-        fu.paramTipos   = new ArrayList<>();
-        fu.receptor     = null;
 
-        // ¿método de struct? func (p Tipo) nombre(...)
-        if (esToken(TipoToken.PAREN_ABRE)) {
-            consume(); // '('
-            consume(); // nombre receptor, e.g. 'p'
-            fu.receptor = consume().getLexema(); // tipo receptor, e.g. 'Punto'
-            if (!esToken(TipoToken.PAREN_CIERRA))
-                throw new RuntimeException("Se esperaba ')' en receptor");
-            consume(); // ')'
+        // ¿Método? func (nombreRec TipoRec) nombre(...)
+        if (esToken(PAREN_ABRE)) {
+            consume();
+            fu.nombreReceptor = peek() != null ? consume().getLexema() : null;
+            fu.tipoReceptor   = peek() != null ? consume().getLexema() : null;
+            if (esToken(PAREN_CIERRA)) consume();
         }
 
-        fu.nombre = consume().getLexema(); // nombre función
+        fu.nombre = peek() != null ? consume().getLexema() : "anonima";
 
         // Parámetros
-        if (!esToken(TipoToken.PAREN_ABRE))
-            throw new RuntimeException("Se esperaba '(' en función " + fu.nombre);
+        if (!esToken(PAREN_ABRE)) { saltarHastaToken(LLAVE_CIERRA); consume(); return; }
         consume(); // '('
-        while (peek() != null && peek().getTipo() != TipoToken.PAREN_CIERRA) {
-            if (peek().getTipo() == TipoToken.COMA) { consume(); continue; }
-            String pNombre = consume().getLexema();
-            if (peek() == null || peek().getTipo() == TipoToken.PAREN_CIERRA) {
-                fu.paramNombres.add(pNombre);
-                fu.paramTipos.add("auto");
-                break;
+        while (peek() != null && !esToken(PAREN_CIERRA)) {
+            if (esToken(COMA)) { consume(); continue; }
+            String pn = consume().getLexema();
+            if (esToken(PAREN_CIERRA)) { fu.paramNombres.add(pn); fu.paramTipos.add("auto"); break; }
+            String pt = consume().getLexema();
+            // tipo puede ser []int, etc.
+            while (esToken(COR_ABRE)) {
+                pt += consume().getLexema();
+                if (esToken(COR_CIERRA)) pt += consume().getLexema();
             }
-            String pTipo = consume().getLexema();
-            // tipo puede ser []int etc
-            while (peek() != null && peek().getTipo() == TipoToken.COR_ABRE) {
-                pTipo += consume().getLexema();
-                if (peek() != null && peek().getTipo() == TipoToken.COR_CIERRA)
-                    pTipo += consume().getLexema();
-            }
-            fu.paramNombres.add(pNombre);
-            fu.paramTipos.add(pTipo);
+            fu.paramNombres.add(pn);
+            fu.paramTipos.add(pt);
         }
-        consume(); // ')'
+        if (esToken(PAREN_CIERRA)) consume();
 
-        // Tipo de retorno opcional
-        fu.tipoRetorno = "void";
-        while (peek() != null && peek().getTipo() != TipoToken.LLAVE_ABRE) {
-            fu.tipoRetorno = peek().getLexema();
-            consume();
+        // Tipo de retorno
+        StringBuilder tr = new StringBuilder();
+        while (peek() != null && !esToken(LLAVE_ABRE)) {
+            tr.append(peek().getLexema()); consume();
         }
+        if (tr.length() > 0) fu.tipoRetorno = tr.toString().trim();
 
-        if (!esToken(TipoToken.LLAVE_ABRE))
-            throw new RuntimeException("Se esperaba '{' en función " + fu.nombre);
+        if (!esToken(LLAVE_ABRE)) return;
         consume(); // '{'
+        fu.tokenInicio = pc; // inicio del cuerpo
 
-        fu.tokenInicio = pc; // guardamos posición del cuerpo
+        saltarBloqueLlaves(); // saltar el cuerpo en el pase 1
 
-        // Saltamos el cuerpo
-        saltarBloqueLlaves();
-
-        // Registrar
-        String clave = fu.receptor != null
-                       ? fu.receptor + "." + fu.nombre
-                       : fu.nombre;
+        String clave = fu.tipoReceptor != null
+                ? fu.tipoReceptor + "." + fu.nombre
+                : fu.nombre;
         funcionesUsuario.put(clave, fu);
         this.nodosGenerados.add(new NodoFuncion(fu.nombre, new ArrayList<>(), null,
                 new NodoBloque(new ArrayList<>(), 0, 0), 0, 0));
     }
 
-    // ─── Saltar definición de función en pase 2 ─────────────────────
-    private void saltarDefinicionFunc() {
+    // ── Saltar definición func completa ─────────────────────────────
+    private void saltarDefFunc() {
         consume(); // 'func'
-        // receptor opcional
-        if (esToken(TipoToken.PAREN_ABRE)) {
-            consume();
-            while (peek() != null && !esToken(TipoToken.PAREN_CIERRA)) consume();
-            consume();
-        }
-        // nombre
-        if (peek() != null) consume();
-        // parámetros
-        if (esToken(TipoToken.PAREN_ABRE)) {
-            consume();
-            int p = 1;
+        if (esToken(PAREN_ABRE)) { consume(); saltarHastaToken(PAREN_CIERRA); consume(); }
+        if (peek() != null) consume(); // nombre
+        if (esToken(PAREN_ABRE)) {
+            consume(); int p = 1;
             while (p > 0 && peek() != null) {
-                if (esToken(TipoToken.PAREN_ABRE)) p++;
-                else if (esToken(TipoToken.PAREN_CIERRA)) p--;
+                if (esToken(PAREN_ABRE)) p++;
+                else if (esToken(PAREN_CIERRA)) p--;
                 consume();
             }
         }
-        // tipo retorno
-        while (peek() != null && !esToken(TipoToken.LLAVE_ABRE)) consume();
-        // cuerpo
-        if (esToken(TipoToken.LLAVE_ABRE)) {
-            consume();
-            saltarBloqueLlaves();
-        }
+        while (peek() != null && !esToken(LLAVE_ABRE)) consume();
+        if (esToken(LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
     }
 
-    private void saltarDefinicionStruct() {
-        if (peek() != null && peek().getTipo() == TipoToken.RES_TYPE) consume();
+    private void saltarDefStruct() {
+        consume(); // 'type'
         if (peek() != null) consume(); // nombre
-        if (peek() != null && peek().getLexema().equals("struct")) consume();
-        if (esToken(TipoToken.LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
+        if (peek() != null && "struct".equals(peek().getLexema())) consume();
+        if (esToken(LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  PROCESAR SENTENCIA
-    // ═════════════════════════════════════════════════════════════════
+    private void saltarDefStructSinType() {
+        consume(); // nombre
+        if (esToken(LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
+    }
+
+
     private void procesarSentencia(Token t) {
+        if (t == null) return;
+        String lex = t.getLexema();
+
+        // break / continue — por lexema (más seguro que enum)
+        if ("break".equals(lex)) {
+            consume();
+            if (esToken(PUNTO_COMA)) consume();
+            throw new BreakException();
+        }
+        if ("continue".equals(lex)) {
+            consume();
+            if (esToken(PUNTO_COMA)) consume();
+            return;
+        }
+
         switch (t.getTipo()) {
             case RES_VAR:    parseDeclaracion(); break;
             case RES_FOR:    parseFor();         break;
             case RES_SWITCH: parseSwitch();      break;
             case RES_IF:     parseIf();          break;
-            case RES_FUNC:   saltarDefinicionFunc(); break;
             case RES_RETURN: parseReturn();      break;
-            case RES_TYPE:   saltarDefinicionStruct(); break;
-            case RES_BREAK:
-                consume(); // consumir 'break'
-                if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
-                throw new BreakException();
+            case RES_TYPE:   saltarDefStruct();  break;
+            case RES_FUNC:   parseFuncEnPase2(); break;
 
             case IDENTIFICADOR:
-                // ¿for range ya consumió var? No — esto viene de asignación o llamada
-                if (pc + 1 < tokens.size() && tokens.get(pc + 1).getTipo() == TipoToken.PAREN_ABRE) {
+                if (esStructSinType()) { saltarDefStructSinType(); break; }
+                if (siguienteEs(PAREN_ABRE)) {
                     String fn = consume().getLexema();
-                    Object res = parseLlamadaFuncion(fn);
+                    parseLlamadaFuncion(fn);
                     this.nodosGenerados.add(new NodoLlamadaFuncion(fn, new ArrayList<>(), 0, 0));
                 } else {
                     parseAsignacion();
                 }
                 break;
 
-            case RES_FMT_PRINTLN:
-            case RES_STRCONV_ATOI:
-            case RES_STRCONV_PARSEFLOAT:
-            case RES_REFLECT_TYPEOF:
-            case RES_APPEND:
-            case RES_LEN:
-            case RES_STRINGS_JOIN: {
+            case RES_FMT_PRINTLN: case RES_STRCONV_ATOI:
+            case RES_STRCONV_PARSEFLOAT: case RES_REFLECT_TYPEOF:
+            case RES_APPEND: case RES_LEN: case RES_STRINGS_JOIN: {
                 String fn = consume().getLexema();
                 parseLlamadaFuncion(fn);
                 this.nodosGenerados.add(new NodoLlamadaFuncion(fn, new ArrayList<>(), 0, 0));
                 break;
             }
 
-            case PAREN_ABRE:
-                evaluarExpresion();
-                if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
-                break;
-
             case LLAVE_ABRE: case LLAVE_CIERRA: case PUNTO_COMA:
                 consume(); break;
 
             default:
-                // token inesperado — lo saltamos para recuperación de errores
-                consume();
+               
+                if (siguienteEs(PAREN_ABRE)) {
+                    String fn = consume().getLexema();
+                    parseLlamadaFuncion(fn);
+                    this.nodosGenerados.add(new NodoLlamadaFuncion(fn, new ArrayList<>(), 0, 0));
+                } else {
+                    consume();
+                }
                 break;
         }
-        if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
+
+        if (esToken(PUNTO_COMA)) consume();
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  FOR  (clásico i:=0; i<n; i++ | range | infinito)
-    // ═════════════════════════════════════════════════════════════════
+    private void parseFuncEnPase2() {
+    int saved = pc;
+    consume(); 
+    if (esToken(PAREN_ABRE)) { consume(); saltarHastaToken(PAREN_CIERRA); consume(); }
+    String nombre = peek() != null ? peek().getLexema() : "";
+    pc = saved;
+
+    if ("main".equals(nombre)) {
+        FuncionUsuario main = funcionesUsuario.get("main");
+        if (main != null) {
+            saltarDefFunc();
+            int afterDef = pc;
+
+            textoAST.setLength(0); 
+            textoAST.append("Programa\n");
+            profundidadAST = 1;
+            agregarNodoAST("Funcion: main()");
+            profundidadAST = 2;
+
+            pc = main.tokenInicio;
+            try { ejecutarBloque(); }
+            catch (ReturnException e) { }
+            pc = afterDef;
+            profundidadAST = 0;
+        } else {
+            saltarDefFunc();
+        }
+    } else {
+        saltarDefFunc();
+    }
+}
+
+    // =================================================================
+    //  FOR — clásico, range, infinito, condición simple
+    // =================================================================
     private void parseFor() {
         consume(); // 'for'
         this.nodosGenerados.add(new NodoFor(null, null, null,
                 new NodoBloque(new ArrayList<>(), 0, 0), 0, 0));
 
-        // ¿bucle infinito? for { ... }
-        if (esToken(TipoToken.LLAVE_ABRE)) {
-            int seguridad = 0;
-            int inicio = pc;
+        // for { } — infinito
+        if (esToken(LLAVE_ABRE)) {
+            int inicio = pc; int seg = 0;
             while (true) {
-                consume(); // '{'
+                pc = inicio; consume();
                 try { ejecutarBloque(); } catch (BreakException e) { return; }
-                pc = inicio;
-                if (seguridad++ > 1_000_000) throw new RuntimeException("Bucle infinito");
+                if (seg++ > 2_000_000) throw new RuntimeException("Bucle infinito");
             }
         }
 
-        // ¿for range?  for i, v := range slice { ... }
-        // Lookahead: buscar la palabra 'range' antes del siguiente '{'
-        if (esForRange()) {
-            parseForRange();
-            return;
-        }
+        if (hayPalabraAntesDeLlave("range"))  { parseForRange();   return; }
+        if (haySemicolonAntesDeLlave())       { parseForClasico(); return; }
 
-        // ¿for clásico?  for init ; cond ; post { ... }
-        if (esForClasico()) {
-            parseForClasico();
-            return;
-        }
-
-        // for con solo condición: for x < 10 { ... }
-        int inicioCondicion = pc;
-        int seguridad = 0;
-        while (evaluarCondicion()) {
-            if (!esToken(TipoToken.LLAVE_ABRE)) break;
-            consume(); // '{'
+        // for condicion { }
+        int inicio = pc; int seg = 0;
+        while (true) {
+            pc = inicio;
+            boolean cond = evaluarCondicion();
+            if (!esToken(LLAVE_ABRE) && !recuperarHastaLlave()) break;
+            if (!cond) { consume(); saltarBloqueLlaves(); return; }
+            consume();
             try { ejecutarBloque(); } catch (BreakException e) { return; }
-            pc = inicioCondicion;
-            if (seguridad++ > 1_000_000) throw new RuntimeException("Bucle infinito");
+            if (seg++ > 2_000_000) throw new RuntimeException("Bucle infinito");
         }
-        // saltar bloque si condición false
-        if (esToken(TipoToken.LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
     }
 
-    private boolean esForRange() {
-        int saved = pc;
-        int profundidad = 0;
-        while (saved < tokens.size()) {
-            Token t = tokens.get(saved);
-            if (t.getTipo() == TipoToken.LLAVE_ABRE && profundidad == 0) break;
-            if (t.getTipo() == TipoToken.PAREN_ABRE) profundidad++;
-            if (t.getTipo() == TipoToken.PAREN_CIERRA) profundidad--;
-            if (t.getLexema().equals("range")) return true;
-            saved++;
+    private boolean hayPalabraAntesDeLlave(String palabra) {
+        int i = pc; int prof = 0;
+        while (i < tokens.size()) {
+            Token t = tokens.get(i);
+            if (t.getTipo() == PAREN_ABRE) prof++;
+            if (t.getTipo() == PAREN_CIERRA) prof--;
+            if (t.getTipo() == LLAVE_ABRE && prof == 0) break;
+            if (t.getLexema().equals(palabra) && prof == 0) return true;
+            i++;
         }
         return false;
     }
 
-    private boolean esForClasico() {
-        // Hay un ';' antes del primer '{'
-        int saved = pc;
-        int profundidad = 0;
-        while (saved < tokens.size()) {
-            Token t = tokens.get(saved);
-            if (t.getTipo() == TipoToken.LLAVE_ABRE && profundidad == 0) break;
-            if (t.getTipo() == TipoToken.PAREN_ABRE) profundidad++;
-            if (t.getTipo() == TipoToken.PAREN_CIERRA) profundidad--;
-            if (t.getTipo() == TipoToken.PUNTO_COMA && profundidad == 0) return true;
-            saved++;
+    private boolean haySemicolonAntesDeLlave() {
+        int i = pc; int prof = 0;
+        while (i < tokens.size()) {
+            Token t = tokens.get(i);
+            if (t.getTipo() == PAREN_ABRE) prof++;
+            if (t.getTipo() == PAREN_CIERRA) prof--;
+            if (t.getTipo() == LLAVE_ABRE && prof == 0) break;
+            if (t.getTipo() == PUNTO_COMA && prof == 0) return true;
+            i++;
         }
         return false;
     }
 
-    // for i, v := range slice { ... }
+    // ── for i, v := range coleccion { } ─────────────────────────────
+    @SuppressWarnings("unchecked")
     private void parseForRange() {
-        // Leer variable(s) de índice / valor
-        String varIdx = null;
-        String varVal = null;
-
-        Token t1 = consume(); // primer identificador (puede ser '_')
+        String varIdx = null, varVal = null;
+        Token t1 = consume();
         varIdx = t1.getLexema();
 
-        if (esToken(TipoToken.COMA)) {
-            consume(); // ','
-            varVal = consume().getLexema(); // segundo identificador
+        if (esToken(COMA)) { consume(); varVal = consume().getLexema(); }
+
+        if (esToken(OP_ASIGN_CORTO) || esToken(OP_ASIGNACION)) consume();
+        if (peek() != null && "range".equals(peek().getLexema())) consume();
+
+        Object coleccion = evaluarExpresion();
+        if (!esToken(LLAVE_ABRE) && !recuperarHastaLlave()) {
+            System.err.println("[ParserAuxiliar] Aviso: se esperaba '{' en for range (pos " + pc + "), sentencia omitida");
+            return;
         }
 
-        // consumir ':=' o '='
-        if (esToken(TipoToken.OP_ASIGN_CORTO) || esToken(TipoToken.OP_ASIGNACION))
-            consume();
-
-        // consumir 'range'
-        if (peek() != null && peek().getLexema().equals("range")) consume();
-
-        // evaluar la expresión del slice
-        Object coleccion = evaluarExpresion();
-
-        if (!esToken(TipoToken.LLAVE_ABRE))
-            throw new RuntimeException("Se esperaba '{' en for range");
-
         int inicioCuerpo = pc;
-        List<?> lista = toList(coleccion);
+        List<Object> lista = coleccion instanceof List
+                ? (List<Object>) coleccion : new ArrayList<>();
 
         for (int i = 0; i < lista.size(); i++) {
             pc = inicioCuerpo;
             consume(); // '{'
+            Entorno prev = this.entorno;
+            Entorno iter = new Entorno(prev);
+            this.entorno = iter;
 
-            Entorno entornoLocal = new Entorno(entorno);
-            ParserAuxiliar subParser = new ParserAuxiliar(tokens, entornoLocal);
-            subParser.funcionesUsuario = this.funcionesUsuario;
-
-            if (!"_".equals(varIdx)) entornoLocal.declarar(varIdx, "int", i);
-            if (varVal != null && !"_".equals(varVal))
-                entornoLocal.declarar(varVal, "auto", lista.get(i));
+            if (!"_".equals(varIdx) && varIdx != null) iter.declarar(varIdx, "int", i);
+            if (varVal != null && !"_".equals(varVal))  iter.declarar(varVal, "auto", lista.get(i));
 
             try {
-                subParser.ejecutarBloqueParcial();
-                this.nodosGenerados.addAll(subParser.getNodosGenerados());
+                ejecutarBloque();
             } catch (BreakException e) {
-                break;
+                this.entorno = prev; break;
             } catch (ReturnException e) {
-                throw e;
+                this.entorno = prev; throw e;
             }
+            this.entorno = prev;
         }
-
-        // Asegurar que pc esté después del bloque
-        // Si el for terminó sin break, ya habremos consumido el cuerpo en la última iteración
-        // Si la lista estaba vacía, saltar el cuerpo
-        if (lista.isEmpty()) {
-            if (esToken(TipoToken.LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
-        }
+        if (lista.isEmpty() && esToken(LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
     }
 
-    // for i := 0; i < n; i++ { ... }
+    // ── for init; cond; post { } ────────────────────────────────────
     private void parseForClasico() {
-        // Init
-        Token primera = peek();
-        if (primera != null && primera.getTipo() == TipoToken.RES_VAR) {
+        // INIT
+        Token init = peek();
+        if (init != null && init.getTipo() == RES_VAR) {
             parseDeclaracion();
-        } else if (primera != null && primera.getTipo() == TipoToken.IDENTIFICADOR) {
-            // puede ser i := 0
+        } else if (init != null && init.getTipo() == IDENTIFICADOR) {
             parseAsignacion();
         }
-        // El ';' después del init puede haber sido consumido por parseDeclaracion/Asignacion
-        if (esToken(TipoToken.PUNTO_COMA)) consume();
+        if (esToken(PUNTO_COMA)) consume();
 
         int inicioCondicion = pc;
-        int seguridad = 0;
+        int seg = 0;
 
         while (true) {
             pc = inicioCondicion;
 
-            // Evaluar condición
-            boolean condicion = evaluarCondicion();
-            if (esToken(TipoToken.PUNTO_COMA)) consume(); // ';' entre condición y post
+            // CONDICIÓN
+            boolean cond = evaluarCondicion();
+            if (esToken(PUNTO_COMA)) consume();
 
-            // Guardar posición del post y del cuerpo
-            int inicioPc = pc;
-
-            // Saltar hasta el '{'
-            int profundidad = 0;
+            // Localizar inicio del POST y del CUERPO
+            int inicioPost = pc;
+            int prof = 0;
             while (pc < tokens.size()) {
                 Token tt = tokens.get(pc);
-                if (tt.getTipo() == TipoToken.PAREN_ABRE) profundidad++;
-                else if (tt.getTipo() == TipoToken.PAREN_CIERRA) profundidad--;
-                else if (tt.getTipo() == TipoToken.LLAVE_ABRE && profundidad == 0) break;
+                if (tt.getTipo() == PAREN_ABRE) prof++;
+                else if (tt.getTipo() == PAREN_CIERRA) prof--;
+                else if (tt.getTipo() == LLAVE_ABRE && prof == 0) break;
                 pc++;
             }
             int inicioCuerpo = pc;
 
-            // Saltar el cuerpo (para calcular posición post-cuerpo)
-            if (condicion) {
-                // Ejecutar cuerpo
+            if (!cond) {
                 pc = inicioCuerpo;
-                consume(); // '{'
-                try {
-                    ejecutarBloque();
-                } catch (BreakException e) {
-                    return;
-                }
-
-                // Ejecutar el post (i++, i += 1, i = i + 1, etc.)
-                int posCuerpoFin = pc;
-                pc = inicioPc;
-                ejecutarPost();
-                pc = posCuerpoFin;
-
-                if (seguridad++ > 1_000_000)
-                    throw new RuntimeException("Bucle infinito en for clásico");
-            } else {
-                // condición false → saltar cuerpo y salir
-                pc = inicioCuerpo;
-                if (esToken(TipoToken.LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
+                if (esToken(LLAVE_ABRE)) { consume(); saltarBloqueLlaves(); }
                 return;
             }
+
+            // CUERPO
+            consume(); // '{'
+            try { ejecutarBloque(); }
+            catch (BreakException e) { return; }
+
+            int despuesCuerpo = pc;
+
+            // POST
+            pc = inicioPost;
+            ejecutarPost();
+            pc = despuesCuerpo;
+
+            if (seg++ > 2_000_000) throw new RuntimeException("Bucle infinito");
         }
     }
 
-    // Ejecuta la sentencia post de un for (i++, i--, i+=1, i=i+1, etc.)
+    // ── Sentencia post: i++, i--, i+=1, i=i+1 ──────────────────────
     private void ejecutarPost() {
         Token t = peek();
-        if (t == null || t.getTipo() == TipoToken.LLAVE_ABRE) return;
+        if (t == null || esToken(LLAVE_ABRE)) return;
 
-        // i++ o i--
-        if (pc + 1 < tokens.size()) {
-            Token next = tokens.get(pc + 1);
-            if (next.getTipo() == TipoToken.OP_INCREMENTO) {
-                String nombre = consume().getLexema();
-                consume(); // '++'
-                Object val = entorno.obtener(nombre);
-                if (val instanceof Number)
-                    entorno.asignar(nombre, ((Number) val).intValue() + 1);
-                if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
-                return;
-            }
-            if (next.getTipo() == TipoToken.OP_DECREMENTO) {
-                String nombre = consume().getLexema();
-                consume(); // '--'
-                Object val = entorno.obtener(nombre);
-                if (val instanceof Number)
-                    entorno.asignar(nombre, ((Number) val).intValue() - 1);
-                if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
-                return;
-            }
-        }
-
-        // i += expr / i -= expr / i = expr
-        if (t.getTipo() == TipoToken.IDENTIFICADOR) {
-            String nombre = consume().getLexema();
-            Token op = peek();
-            if (op != null && (op.getTipo() == TipoToken.OP_ASIGNACION
-                    || op.getTipo() == TipoToken.OP_ASIGN_CORTO
-                    || op.getTipo() == TipoToken.OP_SUMA
-                    || op.getTipo() == TipoToken.OP_RESTA)) {
-                consume(); // op
-                Object expr = evaluarExpresion();
-                if (op.getTipo() == TipoToken.OP_SUMA) {
-                    Object actual = entorno.obtener(nombre);
-                    expr = numSum(actual, expr);
-                } else if (op.getTipo() == TipoToken.OP_RESTA) {
-                    Object actual = entorno.obtener(nombre);
-                    expr = numSub(actual, expr);
+        if (t.getTipo() == IDENTIFICADOR) {
+            if (pc + 1 < tokens.size()) {
+                TipoToken sig = tokens.get(pc + 1).getTipo();
+                if (sig == OP_INCREMENTO) {
+                    String n = consume().getLexema(); consume();
+                    entorno.asignar(n, toInt(entorno.obtener(n)) + 1);
+                    if (esToken(PUNTO_COMA)) consume();
+                    return;
                 }
-                entorno.asignar(nombre, expr);
+                if (sig == OP_DECREMENTO) {
+                    String n = consume().getLexema(); consume();
+                    entorno.asignar(n, toInt(entorno.obtener(n)) - 1);
+                    if (esToken(PUNTO_COMA)) consume();
+                    return;
+                }
             }
+            parseAsignacion();
         }
-        if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  SWITCH
-    // ═════════════════════════════════════════════════════════════════
+   
     private void parseSwitch() {
-        consume(); // 'switch'
-        Object valorSwitch = evaluarExpresion();
+    consume(); // 'switch'
+    Object val = evaluarExpresion();
 
-        if (!esToken(TipoToken.LLAVE_ABRE))
-            throw new RuntimeException("Se esperaba '{' en switch");
-        consume();
+    agregarNodoAST("Switch: " + str(val));
+    profundidadAST++;
+    this.nodosGenerados.add(new NodoSwitch(null, null, new ArrayList<>(), 0, 0));
 
-        this.nodosGenerados.add(new NodoSwitch(null, null, new ArrayList<>(), 0, 0));
+    if (!esToken(LLAVE_ABRE) && !recuperarHastaLlave()) {
+        profundidadAST--;
+        return;
+    }
+    consume();
+    boolean ejecutado = false;
 
-        boolean casoEjecutado = false;
-
-        while (peek() != null && !esToken(TipoToken.LLAVE_CIERRA)) {
-            Token t = peek();
-            if (t.getTipo() == TipoToken.PUNTO_COMA) { consume(); continue; }
-
-            if (t.getTipo() == TipoToken.RES_CASE) {
-                consume();
-                Object valorCase = evaluarExpresion();
-                if (!esToken(TipoToken.DOS_PUNTOS))
-                    throw new RuntimeException("Se esperaba ':' en case");
-                consume();
-
-                if (!casoEjecutado && objetosIguales(valorSwitch, valorCase)) {
-                    try { ejecutarBloqueSwitch(); } catch (BreakException e) { /* sale del switch */ }
-                    casoEjecutado = true;
-                } else {
-                    saltarBloqueSwitch();
-                }
-
-            } else if (t.getTipo() == TipoToken.RES_DEFAULT) {
-                consume();
-                if (esToken(TipoToken.DOS_PUNTOS)) consume();
-
-                if (!casoEjecutado) {
-                    try { ejecutarBloqueSwitch(); } catch (BreakException e) { /* sale del switch */ }
-                    casoEjecutado = true;
-                } else {
-                    saltarBloqueSwitch();
-                }
+    while (peek() != null && !esToken(LLAVE_CIERRA)) {
+        Token t = peek();
+        if (t.getTipo() == PUNTO_COMA) { consume(); continue; }
+        if (t.getTipo() == RES_CASE) {
+            consume();
+            Object valCase = evaluarExpresion();
+            if (esToken(DOS_PUNTOS)) consume();
+            agregarNodoAST("Case: " + str(valCase));
+            profundidadAST++;
+            if (!ejecutado && iguales(val, valCase)) {
+                try { ejecutarSentenciasCase(); } catch (BreakException ignored) {}
+                ejecutado = true;
             } else {
-                consume(); // recuperación
+                saltarSentenciasCase();
             }
+            profundidadAST--;
+        } else if (t.getTipo() == RES_DEFAULT) {
+            consume();
+            if (esToken(DOS_PUNTOS)) consume();
+            agregarNodoAST("Default:");
+            profundidadAST++;
+            if (!ejecutado) {
+                try { ejecutarSentenciasCase(); } catch (BreakException ignored) {}
+                ejecutado = true;
+            } else {
+                saltarSentenciasCase();
+            }
+            profundidadAST--;
+        } else {
+            consume();
         }
+    }
+    if (esToken(LLAVE_CIERRA)) consume();
+    profundidadAST--;
+}
 
-        if (esToken(TipoToken.LLAVE_CIERRA)) consume();
+    private void ejecutarSentenciasCase() {
+        while (peek() != null) {
+            TipoToken tt = peek().getTipo();
+            if (tt == RES_CASE || tt == RES_DEFAULT || tt == LLAVE_CIERRA) return;
+            procesarSentencia(peek()); // BreakException sube
+        }
     }
 
-    /** Ejecuta sentencias de un case hasta el siguiente case/default/} */
-    private void ejecutarBloqueSwitch() {
+    private void saltarSentenciasCase() {
         while (peek() != null) {
-            Token t = peek();
-            if (t.getTipo() == TipoToken.RES_CASE
-                    || t.getTipo() == TipoToken.RES_DEFAULT
-                    || t.getTipo() == TipoToken.LLAVE_CIERRA) return;
-            procesarSentencia(t); // BreakException sube sin capturar
-        }
-    }
-
-    /** Salta sentencias de un case sin ejecutar */
-    private void saltarBloqueSwitch() {
-        while (peek() != null) {
-            Token t = peek();
-            if (t.getTipo() == TipoToken.RES_CASE
-                    || t.getTipo() == TipoToken.RES_DEFAULT
-                    || t.getTipo() == TipoToken.LLAVE_CIERRA) return;
+            TipoToken tt = peek().getTipo();
+            if (tt == RES_CASE || tt == RES_DEFAULT || tt == LLAVE_CIERRA) return;
             consume();
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════
+    // =================================================================
     //  IF / ELSE
-    // ═════════════════════════════════════════════════════════════════
+    // =================================================================
     private void parseIf() {
-        if (esToken(TipoToken.RES_IF)) consume();
-        this.nodosGenerados.add(new NodoIf(null,
-                new NodoBloque(new ArrayList<>(), 0, 0), null, null, 0, 0));
+    if (esToken(RES_IF)) consume();
+    this.nodosGenerados.add(new NodoIf(null,
+            new NodoBloque(new ArrayList<>(),0,0),null,null,0,0));
 
-        boolean condicion = evaluarCondicion();
+    // Capturar la condicion como texto
+    int pcCond = pc;
+    agregarNodoAST("If:");
+    profundidadAST++;
 
-        if (!esToken(TipoToken.LLAVE_ABRE))
-            throw new RuntimeException("Se esperaba '{' en if");
+    boolean cond = evaluarCondicion();
+    agregarNodoAST("Condicion: " + (cond ? "true" : "false"));
+
+    if (!esToken(LLAVE_ABRE) && !recuperarHastaLlave()) {
+        profundidadAST--;
+        return;
+    }
+    consume();
+
+    agregarNodoAST("Entonces:");
+    profundidadAST++;
+    if (cond) ejecutarBloque(); else saltarBloqueLlaves();
+    profundidadAST--;
+
+    if (esToken(RES_ELSE)) {
         consume();
-
-        if (condicion) ejecutarBloque();
-        else           saltarBloqueLlaves();
-
-        if (esToken(TipoToken.RES_ELSE)) {
-            consume();
-            if (esToken(TipoToken.RES_IF)) {
-                parseIf();
-            } else {
-                if (esToken(TipoToken.LLAVE_ABRE)) consume();
-                if (!condicion) ejecutarBloque();
-                else            saltarBloqueLlaves();
-            }
+        agregarNodoAST("Sino:");
+        profundidadAST++;
+        if (esToken(RES_IF)) {
+            profundidadAST--; 
+            parseIf();
+        } else {
+            if (!esToken(LLAVE_ABRE)) recuperarHastaLlave();
+            if (esToken(LLAVE_ABRE)) consume();
+            if (!cond) ejecutarBloque(); else saltarBloqueLlaves();
+            profundidadAST--;
         }
     }
-
-    // ═════════════════════════════════════════════════════════════════
-    //  BLOQUES
-    // ═════════════════════════════════════════════════════════════════
+    profundidadAST--;
+}
+    
+    
     private void ejecutarBloque() {
-        int llavesAbiertas = 1;
-        while (llavesAbiertas > 0 && pc < tokens.size()) {
+        int llaves = 1;
+        while (llaves > 0 && pc < tokens.size()) {
             Token t = tokens.get(pc);
-            if (t.getTipo() == TipoToken.LLAVE_ABRE) { llavesAbiertas++; pc++; continue; }
-            if (t.getTipo() == TipoToken.LLAVE_CIERRA) {
-                llavesAbiertas--; pc++;
-                if (llavesAbiertas == 0) break;
+            if (t.getTipo() == LLAVE_ABRE)  { llaves++; pc++; continue; }
+            if (t.getTipo() == LLAVE_CIERRA) {
+                llaves--; pc++;
+                if (llaves == 0) break;
                 continue;
             }
-            if (llavesAbiertas > 0) {
-                int prev = pc;
-                procesarSentencia(t);
-                if (pc == prev) pc++;
-            }
-        }
-    }
-
-    /** Para for range: ejecuta el bloque en el entorno local del subParser */
-    private void ejecutarBloqueParcial() {
-        int llavesAbiertas = 1;
-        while (llavesAbiertas > 0 && pc < tokens.size()) {
-            Token t = tokens.get(pc);
-            if (t.getTipo() == TipoToken.LLAVE_ABRE) { llavesAbiertas++; pc++; continue; }
-            if (t.getTipo() == TipoToken.LLAVE_CIERRA) {
-                llavesAbiertas--; pc++;
-                if (llavesAbiertas == 0) break;
-                continue;
-            }
-            if (llavesAbiertas > 0) {
+            if (llaves > 0) {
                 int prev = pc;
                 procesarSentencia(t);
                 if (pc == prev) pc++;
@@ -712,61 +657,77 @@ public class ParserAuxiliar {
     }
 
     private void saltarBloqueLlaves() {
-        int llavesAbiertas = 1;
-        while (llavesAbiertas > 0 && pc < tokens.size()) {
+        int llaves = 1;
+        while (llaves > 0 && pc < tokens.size()) {
             Token t = tokens.get(pc);
-            if (t.getTipo() == TipoToken.LLAVE_ABRE)   llavesAbiertas++;
-            else if (t.getTipo() == TipoToken.LLAVE_CIERRA) llavesAbiertas--;
+            if (t.getTipo() == LLAVE_ABRE)   llaves++;
+            else if (t.getTipo() == LLAVE_CIERRA) llaves--;
             pc++;
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════
+    // ─── Recuperación defensiva si falta '{' ──────────────────────────
+    // Busca la '{' real dentro de una ventana razonable de tokens, en vez
+    
+    private boolean recuperarHastaLlave() {
+        int limite = Math.min(tokens.size(), pc + 300);
+        while (pc < limite && peek() != null && !esToken(LLAVE_ABRE)) {
+            if (esToken(PUNTO_COMA) || esToken(LLAVE_CIERRA)) return false;
+            consume();
+        }
+        return esToken(LLAVE_ABRE);
+    }
+
+    // =================================================================
     //  RETURN
-    // ═════════════════════════════════════════════════════════════════
+    // =================================================================
     private void parseReturn() {
-        consume(); // 'return'
+        consume();
         Object valor = null;
-        if (peek() != null
-                && peek().getTipo() != TipoToken.PUNTO_COMA
-                && peek().getTipo() != TipoToken.LLAVE_CIERRA) {
+        if (peek() != null && peek().getTipo() != PUNTO_COMA
+                && peek().getTipo() != LLAVE_CIERRA) {
             valor = evaluarExpresion();
         }
         this.nodosGenerados.add(new NodoReturn(null, 0, 0));
         throw new ReturnException(valor);
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  DECLARACIÓN  var x tipo = val   |   x := val
-    // ═════════════════════════════════════════════════════════════════
+ 
     private void parseDeclaracion() {
-        consume(); // 'var'
-        String nombre = consume().getLexema();
-        String tipo   = consume().getLexema();
+    consume(); // 'var'
+    String nombre = consume().getLexema();
+    String tipo   = consume().getLexema();
 
-        while (peek() != null && peek().getTipo() == TipoToken.COR_ABRE) {
-            tipo += consume().getLexema();
-            if (esToken(TipoToken.COR_CIERRA)) tipo += consume().getLexema();
-        }
-
-        if (esToken(TipoToken.OP_ASIGNACION)) {
-            consume();
-            if (peek() != null && (peek().getTipo() == TipoToken.LLAVE_ABRE
-                    || peek().getLexema().equals("{"))) {
-                entorno.declarar(nombre, tipo, parseSliceLiteral());
-            } else {
-                entorno.declarar(nombre, tipo, evaluarExpresion());
-            }
-        } else {
-            Object defVal = defaultValue(tipo);
-            entorno.declarar(nombre, tipo, defVal);
-        }
-
-        this.nodosGenerados.add(new NodoDeclaracionVar(
-                nombre, new NodoTipo(tipo, 0, 0), null, true, 0, 0));
+    while (esToken(COR_ABRE)) {
+        tipo += consume().getLexema();
+        if (esToken(COR_CIERRA)) tipo += consume().getLexema();
     }
 
-    private Object defaultValue(String tipo) {
+    agregarNodoAST("DeclVar: " + nombre + " [" + tipo + "]");
+    profundidadAST++;
+
+    if (esToken(OP_ASIGNACION)) {
+        consume();
+        Object val;
+        if (esToken(LLAVE_ABRE)) {
+            agregarNodoAST("SliceLiteral");
+            val = parseSliceLiteral();
+        } else {
+            val = evaluarExpresionAST();
+        }
+        entorno.declarar(nombre, tipo, val);
+    } else {
+        agregarNodoAST("ValorDefecto: " + valorDefecto(tipo));
+        entorno.declarar(nombre, tipo, valorDefecto(tipo));
+    }
+
+    profundidadAST--;
+    this.nodosGenerados.add(new NodoDeclaracionVar(
+            nombre, new NodoTipo(tipo, 0, 0), null, true, 0, 0));
+}
+
+    private Object valorDefecto(String tipo) {
+        if (tipo.contains("[]"))    return null;
         switch (tipo) {
             case "int":     return 0;
             case "float64": return 0.0;
@@ -776,229 +737,190 @@ public class ParserAuxiliar {
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  ASIGNACIÓN  x = val | x := val | x.campo = val | x[i] = val
-    //              x += val | x -= val | x++ | x--
-    // ═════════════════════════════════════════════════════════════════
+    // =================================================================
+    //  ASIGNACIÓN — x=v | x:=v | x.c=v | x[i]=v | x++ | x-- | x+=v/-=v/*=v//=v
+    // =================================================================
     @SuppressWarnings("unchecked")
     private void parseAsignacion() {
-        String nombre = consume().getLexema(); // identificador base
+        String nombre = consume().getLexema();
 
-        // ── x++ / x-- ────────────────────────────────────────────────
-        if (esToken(TipoToken.OP_INCREMENTO)) {
+        // x++ / x--
+        if (esToken(OP_INCREMENTO)) {
             consume();
-            Object val = entorno.obtener(nombre);
-            entorno.asignar(nombre, toInt(val) + 1);
+            Object v = entorno.obtener(nombre);
+            if (v != null && v != Entorno.NO_ENCONTRADO) entorno.asignar(nombre, toInt(v) + 1);
             return;
         }
-        if (esToken(TipoToken.OP_DECREMENTO)) {
+        if (esToken(OP_DECREMENTO)) {
             consume();
-            Object val = entorno.obtener(nombre);
-            entorno.asignar(nombre, toInt(val) - 1);
+            Object v = entorno.obtener(nombre);
+            if (v != null && v != Entorno.NO_ENCONTRADO) entorno.asignar(nombre, toInt(v) - 1);
             return;
         }
 
-        // ── x[i] = val  o  x[i][j] = val ────────────────────────────
-        if (esToken(TipoToken.COR_ABRE)) {
+        // x[i] = v  o  x[i][j] = v   (soporta también *= y /=)
+        if (esToken(COR_ABRE)) {
             List<Object> indices = new ArrayList<>();
-            while (esToken(TipoToken.COR_ABRE)) {
-                consume(); // '['
-                indices.add(evaluarExpresion());
-                if (!esToken(TipoToken.COR_CIERRA))
-                    throw new RuntimeException("Se esperaba ']'");
-                consume(); // ']'
+            while (esToken(COR_ABRE)) {
+                consume(); indices.add(evaluarExpresion());
+                if (esToken(COR_CIERRA)) consume();
             }
-
-            // ¿operador de asignación?
             Token op = peek();
-            if (op != null && (op.getTipo() == TipoToken.OP_ASIGNACION
-                    || op.getTipo() == TipoToken.OP_ASIGN_CORTO)) {
+            if (op == null) return;
+            TipoToken opt = op.getTipo();
+            boolean esCompuesto = opt == OP_SUMA || opt == OP_RESTA || opt == OP_MULT || opt == OP_DIV;
+            if (opt == OP_ASIGNACION || opt == OP_ASIGN_CORTO || esCompuesto) {
                 consume();
-                Object nuevoVal = evaluarExpresion();
+                Object newVal = evaluarExpresion();
                 Object base = entorno.obtener(nombre);
+                if (!(base instanceof List)) { if (esToken(PUNTO_COMA)) consume(); return; }
+                List<Object> lista = (List<Object>) base;
+
+    
                 if (indices.size() == 1) {
                     int idx = toInt(indices.get(0));
-                    ((List<Object>) base).set(idx, nuevoVal);
+                    Object actual = obtenerEnIndice(lista, idx, "asignacion x[i]");
+                    if (esCompuesto) newVal = aplicarOperadorCompuesto(opt, actual, newVal);
+                    asignarEnIndice(lista, idx, newVal, "asignacion x[i]");
                 } else if (indices.size() == 2) {
-                    int i = toInt(indices.get(0));
-                    int j = toInt(indices.get(1));
-                    List<Object> fila = (List<Object>) ((List<Object>) base).get(i);
-                    fila.set(j, nuevoVal);
+                    int i = toInt(indices.get(0)), j = toInt(indices.get(1));
+                    Object filaObj = obtenerEnIndice(lista, i, "asignacion x[i][j] (fila)");
+                    if (filaObj instanceof List) {
+                        List<Object> fila = (List<Object>) filaObj;
+                        Object actual = obtenerEnIndice(fila, j, "asignacion x[i][j] (columna)");
+                        if (esCompuesto) newVal = aplicarOperadorCompuesto(opt, actual, newVal);
+                        asignarEnIndice(fila, j, newVal, "asignacion x[i][j] (columna)");
+                    }
                 }
             }
-            // += -=
-            if (op != null && op.getTipo() == TipoToken.OP_SUMA) {
-                consume();
-                Object delta = evaluarExpresion();
-                Object base = entorno.obtener(nombre);
-                int idx = toInt(indices.get(0));
-                Object actual = ((List<Object>) base).get(idx);
-                ((List<Object>) base).set(idx, numSum(actual, delta));
-            }
-            if (op != null && op.getTipo() == TipoToken.OP_RESTA) {
-                consume();
-                Object delta = evaluarExpresion();
-                Object base = entorno.obtener(nombre);
-                int idx = toInt(indices.get(0));
-                Object actual = ((List<Object>) base).get(idx);
-                ((List<Object>) base).set(idx, numSub(actual, delta));
-            }
-            if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
+            if (esToken(PUNTO_COMA)) consume();
             return;
         }
 
-        // ── x.campo.subcampo = val ────────────────────────────────────
+        // x.campo = v
         List<String> ruta = new ArrayList<>();
-        while (esToken(TipoToken.PUNTO)) {
-            consume(); // '.'
-            if (peek() != null && peek().getTipo() == TipoToken.IDENTIFICADOR)
-                ruta.add(consume().getLexema());
+        while (esToken(PUNTO)) {
+            consume();
+            if (esToken(IDENTIFICADOR)) ruta.add(consume().getLexema());
         }
 
         Token op = peek();
-
-        // No hay operador → podría ser una llamada como método suelto; salir
-        if (op == null || (op.getTipo() != TipoToken.OP_ASIGNACION
-                && op.getTipo() != TipoToken.OP_ASIGN_CORTO
-                && op.getTipo() != TipoToken.OP_SUMA
-                && op.getTipo() != TipoToken.OP_RESTA)) {
-            return;
-        }
-        consume(); // consumir operador
+        if (op == null) return;
+        TipoToken opt = op.getTipo();
+        if (opt != OP_ASIGNACION && opt != OP_ASIGN_CORTO
+                && opt != OP_SUMA && opt != OP_RESTA
+                && opt != OP_MULT && opt != OP_DIV) return;
+        consume();
 
         Object valor = evaluarExpresion();
 
         if (ruta.isEmpty()) {
-            if (op.getTipo() == TipoToken.OP_ASIGN_CORTO) {
-                if (entorno.buscar(nombre) != null) {
-                    entorno.asignar(nombre, valor);
-                } else {
-                    entorno.declarar(nombre, "auto", valor);
-                }
-                this.nodosGenerados.add(
-                        new NodoDeclaracionVar(nombre, null, null, false, 0, 0));
-            } else if (op.getTipo() == TipoToken.OP_SUMA) {
-                Object actual = entorno.obtener(nombre);
-                entorno.asignar(nombre, numSum(actual, valor));
-            } else if (op.getTipo() == TipoToken.OP_RESTA) {
-                Object actual = entorno.obtener(nombre);
-                entorno.asignar(nombre, numSub(actual, valor));
-            } else {
+            if (opt == OP_ASIGN_CORTO) {
+                if (entorno.buscar(nombre) != null) entorno.asignar(nombre, valor);
+                else entorno.declarar(nombre, "auto", valor);
+                this.nodosGenerados.add(new NodoDeclaracionVar(nombre, null, null, false, 0, 0));
+            } else if (opt == OP_ASIGNACION) {
                 entorno.asignar(nombre, valor);
+            } else {
+                // += -= *= /=
+                Object actual = entorno.obtener(nombre);
+                entorno.asignar(nombre, aplicarOperadorCompuesto(opt, actual, valor));
             }
         } else {
-            // Asignación a campo de struct
-            Object objetoBase = entorno.obtener(nombre);
-            if (objetoBase == null || objetoBase == Entorno.NO_ENCONTRADO) {
-                objetoBase = new HashMap<String, Object>();
-                entorno.declarar(nombre, "struct", objetoBase);
+            Object base = entorno.obtener(nombre);
+            if (base == null || base == Entorno.NO_ENCONTRADO) {
+                base = new HashMap<String, Object>();
+                entorno.declarar(nombre, "struct", base);
             }
-            if (objetoBase instanceof Map) {
-                String campoFinal = ruta.get(ruta.size() - 1);
-                ((Map<String, Object>) objetoBase).put(campoFinal, valor);
+            if (base instanceof Map) {
+                String cf = ruta.get(ruta.size() - 1);
+                Map<String, Object> m = (Map<String, Object>) base;
+                Object nuevoValor = (opt == OP_ASIGNACION || opt == OP_ASIGN_CORTO)
+                        ? valor : aplicarOperadorCompuesto(opt, m.get(cf), valor);
+                m.put(cf, nuevoValor);
             }
         }
-
-        if (peek() != null && peek().getTipo() == TipoToken.PUNTO_COMA) consume();
+        if (esToken(PUNTO_COMA)) consume();
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  SLICE LITERAL  {1, 2, 3} o {{1,2},{3,4}}
-    //  También []int{} []string{"a","b"}
-    // ═════════════════════════════════════════════════════════════════
-    @SuppressWarnings("unchecked")
+
     private Object parseSliceLiteral() {
         consume(); // '{'
         List<Object> lista = new ArrayList<>();
-
-        while (peek() != null && !peek().getLexema().equals("}")) {
-            if (peek().getTipo() == TipoToken.COMA) { consume(); continue; }
-            if (peek().getTipo() == TipoToken.PUNTO_COMA) { consume(); continue; }
-
-            if (peek().getTipo() == TipoToken.LLAVE_ABRE) {
-                lista.add(parseSliceLiteral()); // sublista 2D
-            } else {
-                lista.add(evaluarExpresion());
-            }
+        while (peek() != null && !esLexema(peek(), "}")) {
+            if (esToken(COMA) || esToken(PUNTO_COMA)) { consume(); continue; }
+            if (esToken(LLAVE_ABRE)) lista.add(parseSliceLiteral());
+            else                     lista.add(evaluarExpresion());
         }
-        if (peek() != null) consume(); // '}'
+        if (esToken(LLAVE_CIERRA)) consume();
         return lista;
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  STRUCT
-    // ═════════════════════════════════════════════════════════════════
-    private void parseStructDef() {
-        saltarDefinicionStruct();
-    }
-
+    
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseInstanciacionStruct(String nombreStruct) {
         consume(); // '{'
-        Map<String, Object> instancia = new HashMap<>();
+        Map<String, Object> inst = new HashMap<>();
         this.nodosGenerados.add(new NodoInstanciaStruct(nombreStruct, new ArrayList<>(), 0, 0));
 
-        while (peek() != null && !esToken(TipoToken.LLAVE_CIERRA)) {
-            if (peek().getTipo() == TipoToken.PUNTO_COMA) { consume(); continue; }
-            if (peek().getTipo() != TipoToken.IDENTIFICADOR) { consume(); continue; }
-
+        while (peek() != null && !esToken(LLAVE_CIERRA)) {
+            if (esToken(PUNTO_COMA) || esToken(COMA)) { consume(); continue; }
+            if (!esToken(IDENTIFICADOR)) { consume(); continue; }
             String campo = consume().getLexema();
-            if (!esToken(TipoToken.DOS_PUNTOS))
-                throw new RuntimeException("Se esperaba ':' en struct " + nombreStruct);
-            consume();
-
-            Object val = evaluarExpresion();
-
-            // Si el valor es un Map (struct anidado), se almacena directamente
-            instancia.put(campo, val);
-
-            if (esToken(TipoToken.COMA)) consume();
+            if (esToken(DOS_PUNTOS)) consume();
+            inst.put(campo, evaluarExpresion());
+            if (esToken(COMA)) consume();
         }
-        if (esToken(TipoToken.LLAVE_CIERRA)) consume();
-        return instancia;
+        if (esToken(LLAVE_CIERRA)) consume();
+        return inst;
     }
 
-    // ═════════════════════════════════════════════════════════════════
+    // =================================================================
     //  LLAMADA A FUNCIÓN
-    // ═════════════════════════════════════════════════════════════════
-    @SuppressWarnings("unchecked")
+    // =================================================================
     private Object parseLlamadaFuncion(String nombre) {
-        if (!esToken(TipoToken.PAREN_ABRE))
-            throw new RuntimeException("Se esperaba '(' en llamada a " + nombre);
-        consume(); // '('
+        if (!esToken(PAREN_ABRE)) throw new RuntimeException("Se esperaba '(' en llamada a " + nombre);
+        consume();
+        List<Object> args = evaluarArgumentos();
+        if (!esToken(PAREN_CIERRA)) throw new RuntimeException("Se esperaba ')' en llamada a " + nombre);
+        consume();
 
-        List<Object> argumentos = evaluarArgumentos();
-
-        if (!esToken(TipoToken.PAREN_CIERRA))
-            throw new RuntimeException("Se esperaba ')' en llamada a " + nombre);
-        consume(); // ')'
-
-        // ── Nativas del entorno ───────────────────────────────────────
-        if (entorno.esNativa(nombre)) {
-            // Manejo especial de append / len con tipo correcto
-            if (nombre.equals("append")) {
-                return ejecutarAppend(argumentos);
+        // fmt.Println — interceptado para formato Go
+        if ("fmt.Println".equals(nombre)) {
+            StringBuilder sb = new StringBuilder();
+            if (args != null) {
+                for (int i = 0; i < args.size(); i++) {
+                    if (i > 0) sb.append(" ");
+                    sb.append(str(args.get(i)));
+                }
             }
-            if (nombre.equals("len")) {
-                return ejecutarLen(argumentos);
-            }
-            return entorno.ejecutarNativa(nombre, argumentos, this.entorno);
+            sb.append("\n");
+            this.entorno.agregarSalida(sb.toString());
+            return null;
         }
 
-        // ── Funciones de usuario registradas ─────────────────────────
-        FuncionUsuario fu = funcionesUsuario.get(nombre);
-        if (fu == null)
-            throw new RuntimeException("Función '" + nombre + "' no declarada");
+        if ("append".equals(nombre)) return ejecutarAppend(args);
+        if ("len".equals(nombre))    return ejecutarLen(args);
 
-        return ejecutarFuncionUsuario(fu, argumentos, null);
+        // Otras nativas del entorno (slices.Index, strings.Join, strconv.Atoi, etc.)
+        if (entorno.esNativa(nombre))
+            return entorno.ejecutarNativa(nombre, args, this.entorno);
+
+        // Funciones de usuario
+        FuncionUsuario fu = funcionesUsuario.get(nombre);
+        if (fu == null) {
+            // Recuperación: reportar y devolver null
+            System.err.println("[ParserAuxiliar] Funcion no encontrada: " + nombre);
+            return null;
+        }
+        return ejecutarFuncionUsuario(fu, args, null);
     }
 
+    @SuppressWarnings("unchecked")
     private Object ejecutarAppend(List<Object> args) {
-        if (args.size() < 2) return args.isEmpty() ? new ArrayList<>() : args.get(0);
-        Object sliceObj = args.get(0);
-        List<Object> lista = sliceObj instanceof List
-                ? new ArrayList<>((List<Object>) sliceObj)
-                : new ArrayList<>();
+        if (args.isEmpty()) return new ArrayList<>();
+        List<Object> lista = args.get(0) instanceof List
+                ? new ArrayList<>((List<Object>) args.get(0)) : new ArrayList<>();
         for (int i = 1; i < args.size(); i++) lista.add(args.get(i));
         return lista;
     }
@@ -1011,39 +933,27 @@ public class ParserAuxiliar {
         return 0;
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  EJECUTAR FUNCIÓN DE USUARIO (incluye métodos de struct)
-    // ═════════════════════════════════════════════════════════════════
-    @SuppressWarnings("unchecked")
+    // =================================================================
+    //  EJECUTAR FUNCIÓN DE USUARIO
+    // =================================================================
     private Object ejecutarFuncionUsuario(FuncionUsuario fu, List<Object> args, Object receptor) {
-        int savedPc  = pc;
-        Entorno savedEntorno = entorno;
+        int savedPc      = pc;
+        Entorno savedEnv = this.entorno;
 
-        Entorno nuevoEntorno = new Entorno(entorno, fu.nombre);
+        Entorno nuevoEnv = new Entorno(savedEnv, fu.nombre);
 
         // Bind receptor si es método
-        if (fu.receptor != null && receptor != null) {
-            // 'receptor' es la variable de tipo struct (Map)
-            // el nombre que usa dentro de la función es el primer param implícito
-            // lo buscamos en los tokens: ya tenemos fu.receptor como tipo
-            // el nombre real del receptor se guardó en fu.paramNombres[0]... no exactamente
-            // Convención: guardamos receptor como "self"
-            nuevoEntorno.declarar("self", fu.receptor, receptor);
-            // También declaramos con el nombre del receptor si lo guardamos
-            if (!fu.paramNombres.isEmpty()
-                    && fu.paramNombres.get(0).equals(fu.receptor)) {
-                // no hacer nada extra
-            }
-        }
+        if (fu.tipoReceptor != null && fu.nombreReceptor != null && receptor != null)
+            nuevoEnv.declarar(fu.nombreReceptor, fu.tipoReceptor, receptor);
 
         // Bind parámetros
         for (int i = 0; i < fu.paramNombres.size(); i++) {
             Object val = i < args.size() ? args.get(i) : null;
-            nuevoEntorno.declarar(fu.paramNombres.get(i), fu.paramTipos.get(i), val);
+            nuevoEnv.declarar(fu.paramNombres.get(i), fu.paramTipos.get(i), val);
         }
 
-        entorno = nuevoEntorno;
-        pc      = fu.tokenInicio;
+        this.entorno = nuevoEnv;
+        pc           = fu.tokenInicio;
 
         Object retorno = null;
         try {
@@ -1051,307 +961,314 @@ public class ParserAuxiliar {
         } catch (ReturnException e) {
             retorno = e.valor;
         } finally {
-            entorno = savedEntorno;
-            pc      = savedPc;
+            this.entorno = savedEnv;
+            pc           = savedPc;
         }
         return retorno;
     }
 
+    // =================================================================
+    //  ARGUMENTOS
+    // =================================================================
     public List<Object> evaluarArgumentos() {
         List<Object> args = new ArrayList<>();
-        if (esToken(TipoToken.PAREN_CIERRA)) return args;
+        if (esToken(PAREN_CIERRA)) return args;
         do {
             args.add(evaluarExpresion());
-            if (esToken(TipoToken.COMA)) consume();
-            else break;
-        } while (!esToken(TipoToken.PAREN_CIERRA));
+            if (esToken(COMA)) consume(); else break;
+        } while (!esToken(PAREN_CIERRA) && peek() != null);
         return args;
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  EVALUACIÓN DE EXPRESIONES
-    // ═════════════════════════════════════════════════════════════════
-    public Object evaluarExpresion()  { return evaluarOr(); }
-    private boolean evaluarCondicion() {
-        Object r = evaluarExpresion();
-        return esVerdadero(r);
-    }
+    // =================================================================
+    //  EXPRESIONES
+    // =================================================================
+    public Object evaluarExpresion() { return evaluarOr(); }
+    private boolean evaluarCondicion() { return esVerdadero(evaluarExpresion()); }
 
     private Object evaluarOr() {
         Object izq = evaluarAnd();
-        while (esToken(TipoToken.OP_OR)) {
-            consume(); Object der = evaluarAnd();
-            izq = esVerdadero(izq) || esVerdadero(der);
-        }
+        while (esToken(OP_OR)) { consume(); izq = esVerdadero(izq) || esVerdadero(evaluarAnd()); }
         return izq;
     }
 
     private Object evaluarAnd() {
         Object izq = evaluarIgualdad();
-        while (esToken(TipoToken.OP_AND)) {
-            consume(); Object der = evaluarIgualdad();
-            izq = esVerdadero(izq) && esVerdadero(der);
-        }
+        while (esToken(OP_AND)) { consume(); izq = esVerdadero(izq) && esVerdadero(evaluarIgualdad()); }
         return izq;
     }
 
     private Object evaluarIgualdad() {
         Object izq = evaluarComparacion();
-        while (esToken(TipoToken.OP_IGUAL) || esToken(TipoToken.OP_DIFERENTE)) {
-            Token op = consume(); Object der = evaluarComparacion();
-            boolean eq = objetosIguales(izq, der);
-            izq = (op.getTipo() == TipoToken.OP_IGUAL) ? eq : !eq;
+        while (esToken(OP_IGUAL) || esToken(OP_DIFERENTE)) {
+            Token op = consume();
+            boolean eq = iguales(izq, evaluarComparacion());
+            izq = op.getTipo() == OP_IGUAL ? eq : !eq;
         }
         return izq;
     }
 
     private Object evaluarComparacion() {
-        Object izq = evaluarTermino();
-        while (esToken(TipoToken.OP_MENOR)   || esToken(TipoToken.OP_MAYOR)
-            || esToken(TipoToken.OP_MENOR_IGUAL) || esToken(TipoToken.OP_MAYOR_IGUAL)) {
-            Token op = consume(); Object der = evaluarTermino();
+        Object izq = evaluarSuma();
+        while (esComparacion()) {
+            Token op = consume();
+            Object der = evaluarSuma();
             double v1 = toDouble(izq), v2 = toDouble(der);
-            switch (op.getTipo()) {
-                case OP_MENOR:       izq = v1 <  v2; break;
-                case OP_MAYOR:       izq = v1 >  v2; break;
-                case OP_MENOR_IGUAL: izq = v1 <= v2; break;
-                case OP_MAYOR_IGUAL: izq = v1 >= v2; break;
-                default: break;
+            String lex = op.getLexema();
+            if ("<".equals(lex)  || op.getTipo() == OP_MENOR)       izq = v1 <  v2;
+            else if (">".equals(lex) || op.getTipo() == OP_MAYOR)   izq = v1 >  v2;
+            else if ("<=".equals(lex))                               izq = v1 <= v2;
+            else if (">=".equals(lex))                               izq = v1 >= v2;
+            else {
+                // Fallback por tipo de enum si existe OP_MENOR_IGUAL / OP_MAYOR_IGUAL
+                try {
+                    if (op.getTipo().name().equals("OP_MENOR_IGUAL")) { izq = v1 <= v2; }
+                    else if (op.getTipo().name().equals("OP_MAYOR_IGUAL")) { izq = v1 >= v2; }
+                } catch (Exception ignored) { izq = false; }
             }
         }
         return izq;
     }
 
-    private Object evaluarTermino() {
-        Object izq = evaluarModulo();
-        while (esToken(TipoToken.OP_SUMA) || esToken(TipoToken.OP_RESTA)) {
-            Token op = consume(); Object der = evaluarModulo();
-            if (op.getTipo() == TipoToken.OP_SUMA
-                    && (izq instanceof String || der instanceof String)) {
+    private boolean esComparacion() {
+        if (pc >= tokens.size()) return false;
+        Token t = tokens.get(pc);
+        TipoToken tt = t.getTipo();
+        if (tt == OP_MENOR || tt == OP_MAYOR) return true;
+        String lex = t.getLexema();
+        if ("<=".equals(lex) || ">=".equals(lex)) return true;
+        try { String name = tt.name(); return name.equals("OP_MENOR_IGUAL") || name.equals("OP_MAYOR_IGUAL"); }
+        catch (Exception e) { return false; }
+    }
+
+    private Object evaluarSuma() {
+        Object izq = evaluarProducto();
+        while (esToken(OP_SUMA) || esToken(OP_RESTA)) {
+            Token op = consume(); Object der = evaluarProducto();
+            if (op.getTipo() == OP_SUMA && (izq instanceof String || der instanceof String))
                 izq = str(izq) + str(der);
+            else izq = op.getTipo() == OP_SUMA ? numSum(izq, der) : numSub(izq, der);
+        }
+        return izq;
+    }
+
+    private Object evaluarProducto() {
+        Object izq = evaluarUnario();
+        while (esToken(OP_MULT) || esToken(OP_DIV) || esMod()) {
+            Token op = consume(); Object der = evaluarUnario();
+            if ("%".equals(op.getLexema()) || esTipoEnum(op, "OP_MOD")) {
+                int divisor = toInt(der);
+                if (divisor == 0) {
+                    System.err.println("[ParserAuxiliar] Aviso: modulo por cero, se devuelve 0");
+                    izq = 0;
+                } else {
+                    izq = toInt(izq) % divisor;
+                }
+            } else if (op.getTipo() == OP_MULT) {
+                izq = preserveInt(izq, der, toDouble(izq) * toDouble(der));
             } else {
-                izq = op.getTipo() == TipoToken.OP_SUMA
-                        ? numSum(izq, der) : numSub(izq, der);
+             
+                double v2 = toDouble(der);
+                if (v2 == 0) {
+                    System.err.println("[ParserAuxiliar] Aviso: division por cero, se devuelve 0");
+                    izq = 0;
+                } else {
+                    izq = preserveInt(izq, der, toDouble(izq) / v2);
+                }
             }
         }
         return izq;
     }
 
-    private Object evaluarModulo() {
-        Object izq = evaluarFactor();
-        while (esToken(TipoToken.OP_MULT) || esToken(TipoToken.OP_DIV)
-            || esToken(TipoToken.OP_MOD)) {
-            Token op = consume(); Object der = evaluarFactor();
-            double v1 = toDouble(izq), v2 = toDouble(der);
-            switch (op.getTipo()) {
-                case OP_MULT: izq = preserveInt(izq, der, v1 * v2); break;
-                case OP_DIV:
-                    if (v2 == 0) throw new RuntimeException("División por cero");
-                    izq = preserveInt(izq, der, v1 / v2); break;
-                case OP_MOD:
-                    izq = (int) v1 % (int) v2; break;
-                default: break;
-            }
-        }
-        return izq;
+    private boolean esMod() {
+        if (pc >= tokens.size()) return false;
+        Token t = tokens.get(pc);
+        if ("%".equals(t.getLexema())) return true;
+        return esTipoEnum(t, "OP_MOD");
     }
 
-    private Object evaluarFactor() { return evaluarPrimario(); }
+    private boolean esTipoEnum(Token t, String nombre) {
+        try { return t.getTipo().name().equals(nombre); } catch (Exception e) { return false; }
+    }
+
+    private Object evaluarUnario() {
+        if (esToken(OP_RESTA)) { consume(); Object v = evaluarUnario(); return v instanceof Integer ? -(Integer)v : -toDouble(v); }
+        if (esToken(OP_NOT))   { consume(); return !esVerdadero(evaluarUnario()); }
+        return evaluarPrimario();
+    }
+
 
     @SuppressWarnings("unchecked")
     private Object evaluarPrimario() {
         Token t = peek();
-        if (t == null) throw new RuntimeException("Fin inesperado de expresión");
+        if (t == null) throw new RuntimeException("Fin inesperado en expresión");
 
-        // Unario
-        if (t.getTipo() == TipoToken.OP_RESTA) {
-            consume(); Object v = evaluarPrimario();
-            return v instanceof Integer ? -(Integer) v : -toDouble(v);
-        }
-        if (t.getTipo() == TipoToken.OP_NOT) {
-            consume(); return !esVerdadero(evaluarPrimario());
+        // Tipo de slice: []int{...}
+        if (esToken(COR_ABRE)) {
+            while (peek() != null && !esToken(LLAVE_ABRE)) consume();
+            return parseSliceLiteral();
         }
 
         t = consume();
-
         switch (t.getTipo()) {
             case LIT_ENTERO:   return Integer.parseInt(t.getLexema());
             case LIT_STRING:   return t.getLexema().replace("\"", "");
             case LIT_BOOLEANO: return Boolean.parseBoolean(t.getLexema());
             case LIT_NIL:      return null;
-            case LIT_FLOTANTE:    return Double.parseDouble(t.getLexema());
-
-            // Tipo de slice: []int{...} []string{...} []float64{...} [][]int{...}
-            case COR_ABRE: {
-                // consumir tipo del slice hasta '{'
-                while (peek() != null && peek().getTipo() != TipoToken.LLAVE_ABRE) consume();
-                return parseSliceLiteral();
-            }
 
             case IDENTIFICADOR: {
-                String nombreId = t.getLexema();
+                String id = t.getLexema();
+                if ("_".equals(id) || "range".equals(id)) return null;
 
-                // _ (blank identifier)
-                if ("_".equals(nombreId)) return null;
+                
+                try { return Double.parseDouble(id); } catch (NumberFormatException ignored) {}
 
-                // 'range' keyword dentro de for range — no debería llegar aquí
-                if ("range".equals(nombreId)) return null;
+                Object obj;
+                boolean existe = entorno.buscar(id) != null;
 
-                // ¿Instanciación de struct?  Nombre{campo: val, ...}
-                boolean yaExiste = entorno.buscar(nombreId) != null;
-                if (!yaExiste && esToken(TipoToken.LLAVE_ABRE)) {
-                    return parseInstanciacionStruct(nombreId);
+         
+                if (!existe && esToken(LLAVE_ABRE)) {
+                    obj = parseInstanciacionStruct(id);
                 }
-
-                // ¿Llamada a función de usuario o nativa?
-                if (esToken(TipoToken.PAREN_ABRE)) {
-                    return parseLlamadaFuncion(nombreId);
+                // ¿Llamada a función?
+                else if (esToken(PAREN_ABRE)) {
+                    obj = parseLlamadaFuncion(id);
                 }
-
-                // Variable o acceso a slice/struct
-                Object obj = entorno.obtener(nombreId);
-                if (obj == Entorno.NO_ENCONTRADO) {
-                    // Recuperación de errores: devolver null
-                    return null;
-                }
-
-                // Acceso a slice:  nombre[i] o nombre[i][j]
-                while (esToken(TipoToken.COR_ABRE)) {
-                    consume(); // '['
-                    Object idxObj = evaluarExpresion();
-                    int idx = toInt(idxObj);
-                    if (!esToken(TipoToken.COR_CIERRA))
-                        throw new RuntimeException("Se esperaba ']'");
-                    consume(); // ']'
-
-                    if (obj instanceof List) {
-                        List<Object> lista = (List<Object>) obj;
-                        if (idx < 0 || idx >= lista.size())
-                            throw new RuntimeException("Índice " + idx + " fuera de rango");
-                        obj = lista.get(idx);
+                // Variable
+                else {
+                    Object v = entorno.obtener(id);
+                    if (v == Entorno.NO_ENCONTRADO) {
+                        // Puede ser una función de usuario — intentar como llamada
+                        if (funcionesUsuario.containsKey(id) && esToken(PAREN_ABRE)) {
+                            obj = parseLlamadaFuncion(id);
+                        } else {
+                            obj = null; // recuperación silenciosa
+                        }
+                    } else {
+                        obj = v;
                     }
                 }
 
-                // Acceso a campo / llamada a método de struct
-                while (esToken(TipoToken.PUNTO)) {
-                    consume(); // '.'
-                    String campo = consume().getLexema();
+              
+                while (esToken(COR_ABRE) || esToken(PUNTO)) {
+                    if (esToken(COR_ABRE)) {
+                        consume();
+                        Object idxObj = evaluarExpresion();
+                        int idx = toInt(idxObj);
+                        if (esToken(COR_CIERRA)) consume();
 
-                    // ¿es llamada a método?
-                    if (esToken(TipoToken.PAREN_ABRE)) {
-                        // Buscar método por tipo del receptor
-                        String tipoReceptor = obtenerTipoStruct(obj);
-                        String clave = tipoReceptor + "." + campo;
-                        FuncionUsuario metodo = funcionesUsuario.get(clave);
-                        if (metodo != null) {
-                            consume(); // '('
-                            List<Object> argsMet = evaluarArgumentos();
-                            consume(); // ')'
-                            obj = ejecutarFuncionUsuario(metodo, argsMet, obj);
+                        if (obj instanceof List) {
+                            obj = obtenerEnIndice((List<Object>) obj, idx, "acceso a slice");
                         } else {
-                            // Recuperación
-                            consume(); evaluarArgumentos(); consume();
                             obj = null;
                         }
-                        continue;
-                    }
+                    } else { // PUNTO
+                        consume();
+                        if (!esToken(IDENTIFICADOR)) break;
+                        String campo = consume().getLexema();
 
-                    // Acceso a campo
-                    if (obj instanceof Map) {
-                        obj = ((Map<String, Object>) obj).get(campo);
-                    } else {
-                        obj = null;
+      
+                        if (!(obj instanceof Map)) {
+                            if (esToken(PAREN_ABRE)) {
+                                consume(); evaluarArgumentos();
+                                if (esToken(PAREN_CIERRA)) consume();
+                            }
+                            obj = null;
+                            continue;
+                        }
+
+                        if (esToken(PAREN_ABRE)) {
+                            // Llamada a método de struct
+                            String tipoRec = buscarTipoStruct(obj);
+                            FuncionUsuario met = funcionesUsuario.get(tipoRec + "." + campo);
+                            if (met != null) {
+                                consume(); List<Object> argsMet = evaluarArgumentos();
+                                if (esToken(PAREN_CIERRA)) consume();
+                                obj = ejecutarFuncionUsuario(met, argsMet, obj);
+                            } else {
+                                consume(); evaluarArgumentos();
+                                if (esToken(PAREN_CIERRA)) consume();
+                                obj = null;
+                            }
+                        } else {
+                            // Acceso a campo
+                            obj = ((Map<String, Object>) obj).get(campo);
+                        }
                     }
                 }
-
                 return obj;
             }
 
-            case RES_FMT_PRINTLN:
-            case RES_STRCONV_ATOI:
-            case RES_STRCONV_PARSEFLOAT:
-            case RES_REFLECT_TYPEOF:
-            case RES_APPEND:
-            case RES_LEN:
-            case RES_STRINGS_JOIN:
+            case RES_FMT_PRINTLN: case RES_STRCONV_ATOI:
+            case RES_STRCONV_PARSEFLOAT: case RES_REFLECT_TYPEOF:
+            case RES_APPEND: case RES_LEN: case RES_STRINGS_JOIN:
                 return parseLlamadaFuncion(t.getLexema());
 
             case PAREN_ABRE: {
                 Object val = evaluarExpresion();
-                if (!esToken(TipoToken.PAREN_CIERRA))
-                    throw new RuntimeException("Se esperaba ')'");
-                consume();
+                if (esToken(PAREN_CIERRA)) consume();
                 return val;
             }
 
             default:
-                // Recuperación silenciosa
+            
+                if (esToken(PAREN_ABRE)) {
+                    return parseLlamadaFuncion(t.getLexema());
+                }
+                // Último intento: número flotante
+                try { return Double.parseDouble(t.getLexema()); } catch (NumberFormatException ignored) {}
                 return null;
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    //  UTILIDADES
-    // ═════════════════════════════════════════════════════════════════
 
-  @SuppressWarnings("unchecked")
-private String obtenerTipoStruct(Object obj) {
-    if (!(obj instanceof Map)) return "";
-    Map<String, Object> m = (Map<String, Object>) obj;
+    @SuppressWarnings("unchecked")
+    private String buscarTipoStruct(Object obj) {
 
-    for (String clave : funcionesUsuario.keySet()) {
-        if (!clave.contains(".")) continue;
-        
-        String tipo = clave.substring(0, clave.indexOf('.'));
-        ast.NodoStruct ns = entorno.buscarStruct(tipo);
-        
-        if (ns != null) {
-            // 1. Creamos un Set para guardar los nombres de los campos del struct
-            java.util.Set<String> clavesDelStruct = new java.util.HashSet<>();
+        if (obj == null)             return "";
+        if (obj instanceof List)     return "";   
+        if (!(obj instanceof Map))   return "";   
 
-            // 2. Extraemos los nombres desde la lista de campos
-            if (ns.getCampos() != null) {
-                for (ast.NodoParametro p : ns.getCampos()) {
-                    // ASUNCIÓN: NodoParametro tiene un método getNombre(). 
-                    // Cambia getNombre() por el nombre real de tu método en NodoParametro
-                    clavesDelStruct.add(p.getNombre()); 
+        Map<?, ?> m;
+        try { m = (Map<?, ?>) obj; }
+        catch (Exception e) { return ""; }
+        if (m.isEmpty()) return "";
+
+        for (Map.Entry<String, FuncionUsuario> entry : funcionesUsuario.entrySet()) {
+            FuncionUsuario fu = entry.getValue();
+            if (fu == null || fu.tipoReceptor == null) continue;
+            try {
+                ast.NodoStruct ns = entorno.buscarStruct(fu.tipoReceptor);
+                if (ns == null) continue;
+                Map<String, String> campos = null;
+                try { campos = (Map<String, String>) ns.getCampos(); }
+                catch (Exception ex) { continue; }
+                if (campos == null || campos.isEmpty()) continue;
+            
+                boolean match = false;
+                for (String c : campos.keySet()) {
+                    if (m.containsKey(c)) { match = true; break; }
                 }
-            }
-
-            // 3. Extraemos los nombres si existen en el mapa de atributos
-            if (ns.getAtributosMap() != null) {
-                clavesDelStruct.addAll(ns.getAtributosMap().keySet());
-            }
-
-            // 4. Ahora sí, comparamos
-            if (!clavesDelStruct.isEmpty() && m.keySet().containsAll(clavesDelStruct)) {
-                return tipo;
-            }
+                if (match) return fu.tipoReceptor;
+            } catch (Exception ex) { /* continuar con el siguiente */ }
         }
+        return "";
     }
-    return "";
-}
 
-    private boolean objetosIguales(Object a, Object b) {
+    
+    private boolean iguales(Object a, Object b) {
         if (a == null && b == null) return true;
         if (a == null || b == null) return false;
-        if (a instanceof Number && b instanceof Number)
-            return toDouble(a) == toDouble(b);
+        if (a instanceof Number && b instanceof Number) return toDouble(a) == toDouble(b);
         return a.equals(b);
     }
 
     private boolean esVerdadero(Object v) {
         if (v instanceof Boolean) return (Boolean) v;
         if (v instanceof Integer) return ((Integer) v) != 0;
-        if (v instanceof Double)  return ((Double) v)  != 0.0;
-        if (v instanceof String)  return !((String) v).isEmpty();
+        if (v instanceof Double)  return ((Double)  v) != 0.0;
+        if (v instanceof String)  return !((String)  v).isEmpty();
         return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Object> toList(Object o) {
-        if (o instanceof List) return (List<Object>) o;
-        return new ArrayList<>();
     }
 
     private int toInt(Object o) {
@@ -1367,37 +1284,139 @@ private String obtenerTipoStruct(Object obj) {
     }
 
     private String str(Object o) {
-        return o == null ? "nil" : o.toString();
+        if (o == null) return "<nil>";
+        if (o instanceof List) {
+            StringBuilder sb = new StringBuilder("[");
+            List<?> l = (List<?>) o;
+            for (int i = 0; i < l.size(); i++) {
+                if (i > 0) sb.append(" ");
+                sb.append(str(l.get(i)));
+            }
+            sb.append("]"); return sb.toString();
+        }
+        // Doubles que son enteros: mostrar sin decimal
+        if (o instanceof Double) {
+            double d = (Double) o;
+            if (d == Math.floor(d) && !Double.isInfinite(d)) return String.valueOf((long) d);
+            return String.valueOf(d);
+        }
+        return o.toString();
     }
 
     private Object numSum(Object a, Object b) {
-        if (a instanceof Integer && b instanceof Integer) return (Integer) a + (Integer) b;
+        if (a instanceof Integer && b instanceof Integer) return (Integer)a + (Integer)b;
         return toDouble(a) + toDouble(b);
     }
 
     private Object numSub(Object a, Object b) {
-        if (a instanceof Integer && b instanceof Integer) return (Integer) a - (Integer) b;
+        if (a instanceof Integer && b instanceof Integer) return (Integer)a - (Integer)b;
         return toDouble(a) - toDouble(b);
     }
 
-    private Object preserveInt(Object a, Object b, double result) {
-        if (a instanceof Integer && b instanceof Integer && result == (int) result)
-            return (int) result;
-        return result;
+    private Object preserveInt(Object a, Object b, double r) {
+        if (a instanceof Integer && b instanceof Integer && r == (int)r) return (int)r;
+        return r;
     }
 
-    // ─── Navegación de tokens ─────────────────────────────────────────
+   
+    private Object aplicarOperadorCompuesto(TipoToken opt, Object actual, Object nuevo) {
+        if (opt == OP_SUMA) {
+            return (actual instanceof String || nuevo instanceof String)
+                    ? str(actual) + str(nuevo) : numSum(actual, nuevo);
+        }
+        if (opt == OP_RESTA) return numSub(actual, nuevo);
+        if (opt == OP_MULT)  return preserveInt(actual, nuevo, toDouble(actual) * toDouble(nuevo));
+        if (opt == OP_DIV) {
+            double d = toDouble(nuevo);
+            if (d == 0) {
+                // NUEVO: división por cero "suave" en operador compuesto.
+                System.err.println("[ParserAuxiliar] Aviso: division por cero en operador compuesto, valor sin cambios");
+                return actual;
+            }
+            return preserveInt(actual, nuevo, toDouble(actual) / d);
+        }
+        return nuevo; // OP_ASIGNACION / OP_ASIGN_CORTO -> reemplazo directo
+    }
+
+    
+    private Object obtenerEnIndice(List<Object> lista, int idx, String contexto) {
+        if (lista == null) return null;
+        if (idx < 0 || idx >= lista.size()) {
+            System.err.println("[ParserAuxiliar] Aviso: indice " + idx
+                    + " fuera de rango (longitud " + lista.size() + ") en " + contexto + ", se devuelve nil");
+            return null;
+        }
+        return lista.get(idx);
+    }
+
+    
+    private boolean asignarEnIndice(List<Object> lista, int idx, Object valor, String contexto) {
+        if (lista == null) return false;
+        if (idx < 0 || idx >= lista.size()) {
+            System.err.println("[ParserAuxiliar] Aviso: indice " + idx
+                    + " fuera de rango (longitud " + lista.size() + ") en " + contexto + ", asignacion omitida");
+            return false;
+        }
+        lista.set(idx, valor);
+        return true;
+    }
+
+    private boolean esLexema(Token t, String s) {
+        return t != null && t.getLexema().equals(s);
+    }
+
+    // ─── Navegación ──────────────────────────────────────────────────
     private boolean esToken(TipoToken tipo) {
         return pc < tokens.size() && tokens.get(pc).getTipo() == tipo;
     }
 
+    private boolean siguienteEs(TipoToken tipo) {
+        return pc + 1 < tokens.size() && tokens.get(pc + 1).getTipo() == tipo;
+    }
+
+    private void saltarHastaToken(TipoToken stop) {
+        while (peek() != null && !esToken(stop)) consume();
+    }
+
     private Token consume() {
         if (pc >= tokens.size())
-            throw new RuntimeException("Fin inesperado del archivo en posición " + pc);
+            throw new RuntimeException("Fin inesperado del archivo (pos " + pc + ")");
         return tokens.get(pc++);
     }
 
     private Token peek() {
         return pc < tokens.size() ? tokens.get(pc) : null;
     }
+
+private Object evaluarExpresionAST() {
+    int pcAntes = pc;
+    Object val = evaluarExpresion();
+    // Reconstruir el texto de la expresión desde los tokens consumidos
+    StringBuilder exprStr = new StringBuilder();
+    for (int i = pcAntes; i < pc; i++) {
+        exprStr.append(tokens.get(i).getLexema());
+    }
+    String textoExpr = exprStr.toString().trim();
+    // Simplificar si es muy largo
+    if (textoExpr.length() > 40) textoExpr = textoExpr.substring(0, 37) + "...";
+    agregarNodoAST("Expr: " + textoExpr + " => " + str(val));
+    return val;
 }
+
+public List<Object> evaluarArgumentosAST() {
+    List<Object> args = new ArrayList<>();
+    if (esToken(PAREN_CIERRA)) return args;
+    int argNum = 0;
+    do {
+        int pcAntes = pc;
+        Object val = evaluarExpresion();
+        StringBuilder exprStr = new StringBuilder();
+        for (int i = pcAntes; i < pc; i++) exprStr.append(tokens.get(i).getLexema());
+        String textoExpr = exprStr.toString().trim();
+        if (textoExpr.length() > 35) textoExpr = textoExpr.substring(0, 32) + "...";
+        agregarNodoAST("Arg[" + argNum++ + "]: " + textoExpr + " => " + str(val));
+        args.add(val);
+        if (esToken(COMA)) consume(); else break;
+    } while (!esToken(PAREN_CIERRA) && peek() != null);
+    return args;
+}}

@@ -23,8 +23,7 @@ public class NodoReturn extends Nodo {
             valorRetorno = ((Nodo) this.expresion).execute(entorno);
         }
         
-        // Lanzar la excepción especial para interrumpir la ejecución del bloque
-        
+          
         throw new ReturnException(valorRetorno); 
     }
 
